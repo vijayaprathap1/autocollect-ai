@@ -1,0 +1,255 @@
+import { servicePool } from "../../lib/db.js";
+import { sendEmail } from "../../lib/postmark.js";
+import { sendSms } from "../../lib/sms.js";
+import { renderTemplate } from "./render.js";
+import { notFound } from "../../lib/errors.js";
+import type { WorkflowStep } from "@autocollect/shared";
+
+type InvoiceForEngine = {
+  id: string;
+  tenant_id: string;
+  amount_due: number;
+  currency: string;
+  due_date: string | null;
+  payment_link: string | null;
+  external_id: string | null;
+  next_step_index: number;
+  next_step_due_at: string | null;
+  workflow_id: string | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+  customer_sms_opt_out: boolean | null;
+  tenant_name: string;
+  tone: string;
+};
+
+type WorkflowRow = { id: string; enabled: boolean; steps: WorkflowStep[] };
+
+const INVOICE_SELECT = `
+  SELECT i.id, i.tenant_id, i.amount_due, i.currency, i.due_date, i.payment_link,
+         i.external_id, i.next_step_index, i.next_step_due_at, i.workflow_id,
+         c.name AS customer_name, c.email AS customer_email, c.phone AS customer_phone,
+         c.sms_opt_out AS customer_sms_opt_out,
+         t.name AS tenant_name, t.tone
+    FROM invoices i
+    JOIN tenants t ON t.id = i.tenant_id
+    LEFT JOIN customers c ON c.id = i.customer_id
+`;
+
+function addDays(date: Date | string, days: number): Date {
+  const base =
+    typeof date === "string"
+      ? (() => {
+          const [y, m, d] = date.split("-").map(Number);
+          return new Date(y, m - 1, d, 0, 0, 0, 0);
+        })()
+      : date;
+  return new Date(base.getTime() + days * 86400000);
+}
+
+function scheduledFor(dueDate: Date | string | null, delayDays: number, fallbackNow: Date): Date {
+  if (!dueDate) return fallbackNow;
+  return addDays(dueDate, delayDays);
+}
+
+async function getWorkflow(inv: InvoiceForEngine): Promise<WorkflowRow | null> {
+  if (inv.workflow_id) {
+    const r = await servicePool.query<WorkflowRow>(
+      `SELECT id, enabled, steps FROM workflows WHERE id = $1 AND tenant_id = $2`,
+      [inv.workflow_id, inv.tenant_id],
+    );
+    return r.rows[0] ?? null;
+  }
+  const r = await servicePool.query<WorkflowRow>(
+    `SELECT id, enabled, steps FROM workflows WHERE tenant_id = $1 AND is_default = TRUE LIMIT 1`,
+    [inv.tenant_id],
+  );
+  return r.rows[0] ?? null;
+}
+
+async function loadInvoice(tenantId: string, invoiceId: string): Promise<InvoiceForEngine | null> {
+  const r = await servicePool.query<InvoiceForEngine>(
+    `${INVOICE_SELECT} WHERE i.id = $1 AND i.tenant_id = $2`,
+    [invoiceId, tenantId],
+  );
+  return r.rows[0] ?? null;
+}
+
+async function completeSequence(inv: InvoiceForEngine): Promise<void> {
+  await servicePool.query(
+    `UPDATE invoices SET next_step_index = 9999, next_step_due_at = NULL, updated_at = now()
+     WHERE id = $1`,
+    [inv.id],
+  );
+}
+
+/**
+ * Process a single invoice.
+ * - When `force` is true (manual "send now") the schedule is ignored, but the
+ *   workflow must exist and the template must still be approved.
+ * - `next_step_due_at` set by an inbound "promise to pay" reply is honored: the
+ *   sequence stays quiet until that date passes.
+ * - Sends are recorded idempotently (unique per invoice+step), so a crash
+ *   between send and advance cannot double-send.
+ */
+async function processOne(
+  inv: InvoiceForEngine,
+  now: Date,
+  force: boolean,
+): Promise<"sent" | "advanced" | "skipped" | "noop"> {
+  const wf = await getWorkflow(inv);
+  if (!wf) return "noop";
+  if (!force && !wf.enabled) return "noop";
+
+  const steps = Array.isArray(wf.steps) ? wf.steps : [];
+  const step = steps[inv.next_step_index];
+
+  if (!step) {
+    await completeSequence(inv);
+    return "advanced";
+  }
+
+  if (!force) {
+    const deferred = inv.next_step_due_at ? new Date(inv.next_step_due_at) : null;
+    if (deferred && deferred > now) return "noop"; // promise-deferred: keep waiting
+
+    const scheduled = scheduledFor(inv.due_date, step.delayDays, now);
+    if (now < scheduled) {
+      await servicePool.query(
+        `UPDATE invoices SET next_step_due_at = $2, updated_at = now() WHERE id = $1`,
+        [inv.id, scheduled.toISOString()],
+      );
+      return "skipped";
+    }
+  }
+
+  const template = step.templateId
+    ? (
+        await servicePool.query<{ id: string; subject: string; body: string; approved: boolean }>(
+          `SELECT id, subject, body, approved FROM templates WHERE id = $1 AND tenant_id = $2`,
+          [step.templateId, inv.tenant_id],
+        )
+      ).rows[0]
+    : undefined;
+
+  if (!template?.approved) return "noop"; // never send unapproved templates
+
+  const rendered = renderTemplate(template, {
+    clientName: inv.customer_name,
+    companyName: inv.tenant_name,
+    amountCents: inv.amount_due,
+    currency: inv.currency,
+    dueDate: inv.due_date,
+    payLink: inv.payment_link,
+    invoiceNumber: inv.external_id,
+    tone: inv.tone,
+  });
+
+  const channel = step.channel === "sms" ? "sms" : "email";
+  let providerMsgId: string;
+  if (channel === "sms") {
+    if (!inv.customer_phone) return "noop"; // no recipient — retry next scan
+    if (inv.customer_sms_opt_out) return "noop"; // respect opt-out
+    const body = rendered.body.replace(/\s+/g, " ").trim().slice(0, 160);
+    providerMsgId = (await sendSms({ to: inv.customer_phone, body })).providerMsgId;
+  } else {
+    if (!inv.customer_email) return "noop"; // no recipient — retry next scan
+    providerMsgId = (
+      await sendEmail({
+        to: inv.customer_email,
+        subject: rendered.subject,
+        text: rendered.body,
+        tag: `invoice-${inv.external_id ?? inv.id}`,
+      })
+    ).providerMsgId;
+  }
+
+  // Idempotent send record: a unique index blocks a second send for the same
+  // invoice+step (e.g. overlapping scans or a crash between send and advance).
+  const inserted = await servicePool.query(
+    `INSERT INTO messages (tenant_id, invoice_id, step_index, channel, provider_msg_id, status, sent_at)
+     VALUES ($1, $2, $3, $4, $5, 'sent', now())
+     ON CONFLICT (tenant_id, invoice_id, step_index) WHERE step_index IS NOT NULL DO NOTHING
+     RETURNING id`,
+    [inv.tenant_id, inv.id, inv.next_step_index, channel, providerMsgId],
+  );
+  if (inserted.rows.length === 0) return "noop"; // already sent this step
+
+  await servicePool.query(
+    `INSERT INTO audit_log (tenant_id, actor, action, detail)
+     VALUES ($1, 'system', 'dunning_sent', $2::jsonb)`,
+    [
+      inv.tenant_id,
+      JSON.stringify({
+        invoice_id: inv.id,
+        step_index: inv.next_step_index,
+        channel,
+        provider_msg_id: providerMsgId,
+        manual: force,
+      }),
+    ],
+  );
+
+  const nextIndex = inv.next_step_index + 1;
+  const nextStep = steps[nextIndex];
+  if (!nextStep) {
+    await completeSequence(inv);
+  } else {
+    const nextScheduled = scheduledFor(inv.due_date, nextStep.delayDays, now);
+    await servicePool.query(
+      `UPDATE invoices SET next_step_index = $2, next_step_due_at = $3, updated_at = now() WHERE id = $1`,
+      [inv.id, nextIndex, nextScheduled.toISOString()],
+    );
+  }
+
+  return "sent";
+}
+
+/**
+ * Evaluate all open invoices against their dunning workflow.
+ * Sends due reminders (only with approved templates) and advances sequences.
+ * A failure on one invoice is isolated so the rest of the batch still runs.
+ * Returns the number of emails/SMS sent.
+ */
+export async function runDunning(now = new Date()): Promise<number> {
+  const candidates = await servicePool.query<InvoiceForEngine>(
+    `${INVOICE_SELECT} WHERE i.status = 'open' AND i.next_step_index < 9999`,
+  );
+
+  let sent = 0;
+
+  for (const inv of candidates.rows) {
+    try {
+      const result = await processOne(inv, now, false);
+      if (result === "sent") sent += 1;
+    } catch (err) {
+      await servicePool
+        .query(
+          `INSERT INTO audit_log (tenant_id, actor, action, detail)
+           VALUES ($1, 'system', 'dunning_error', $2::jsonb)`,
+          [
+            inv.tenant_id,
+            JSON.stringify({
+              invoice_id: inv.id,
+              error: err instanceof Error ? err.message : String(err),
+            }),
+          ],
+        )
+        .catch(() => {});
+    }
+  }
+
+  return sent;
+}
+
+/** Manual "send now" for a single invoice (admin-triggered). */
+export async function sendNowForInvoice(
+  tenantId: string,
+  invoiceId: string,
+): Promise<{ sent: boolean }> {
+  const inv = await loadInvoice(tenantId, invoiceId);
+  if (!inv) throw notFound("Invoice not found");
+  const result = await processOne(inv, new Date(), true);
+  return { sent: result === "sent" };
+}

@@ -1,0 +1,22 @@
+# PostgreSQL for AutoCollect AI local development
+# Dedicated instance to avoid conflicts with any local postgres. Port 5433.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: autocollect-pg
+    environment:
+      POSTGRES_USER: autocollect
+      POSTGRES_PASSWORD: autocollect_dev
+      POSTGRES_DB: autocollect
+    ports:
+      - "5433:5432"
+    volumes:
+      - autocollect_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U autocollect -d autocollect"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  autocollect_pgdata:

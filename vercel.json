@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "apps/web/package.json", "use": "@vercel/static-build", "config": { "distDir": "dist" } },
+    { "src": "apps/api/src/serverless.ts", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "apps/api/src/serverless.ts" },
+    { "src": "/(.*)", "dest": "apps/web/dist/index.html" }
+  ],
+  "crons": [
+    { "path": "/api/cron/dunning", "schedule": "*/5 * * * *" }
+  ]
+}
