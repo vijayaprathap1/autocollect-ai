@@ -27,9 +27,11 @@ export const config = {
   inboundWebhookToken: env("POSTMARK_WEBHOOK_TOKEN"),
 
   // Auth
-  clerkSecretKey: env("CLERK_SECRET_KEY"),
-  clerkIssuer: env("CLERK_ISSUER"),
-  devAuthEnabled: !env("CLERK_SECRET_KEY"),
+  sessionTtlHours: Number(env("SESSION_TTL_HOURS", "720")),  // 30 days
+  resetTokenTtlMinutes: Number(env("RESET_TOKEN_TTL_MINUTES", "60")),
+  verifyTokenTtlHours: Number(env("VERIFY_TOKEN_TTL_HOURS", "24")),
+  superAdminEmail: env("SUPER_ADMIN_EMAIL", "admin@autocollect.local"),
+  superAdminPassword: env("SUPER_ADMIN_PASSWORD", "admin123"),
 
   // Stripe
   stripeSecretKey: env("STRIPE_SECRET_KEY"),
@@ -65,9 +67,30 @@ export const config = {
 
   // Monitoring
   errorWebhookUrl: env("ERROR_WEBHOOK_URL"),
+  providerTimeoutMs: Number(env("PROVIDER_TIMEOUT_MS", "15000")),
 
   // Serverless cron trigger secret (see modules/cron)
   cronSecret: env("CRON_SECRET"),
 };
 
 export const isDev = config.nodeEnv !== "production";
+
+export function validateProductionConfig(): void {
+  if (config.nodeEnv !== "production") return;
+
+  const missing: string[] = [];
+  if (!process.env.DATABASE_URL) missing.push("DATABASE_URL");
+  if (!process.env.SERVICE_DATABASE_URL) missing.push("SERVICE_DATABASE_URL");
+  if (!config.credentialsEncryptionKey || config.credentialsEncryptionKey.length !== 32) {
+    missing.push("CREDENTIALS_ENCRYPTION_KEY (32 characters)");
+  }
+  if (!config.stateSecret) missing.push("OAUTH_STATE_SECRET");
+  if (!config.inboundWebhookToken) missing.push("POSTMARK_WEBHOOK_TOKEN");
+  if (!config.postmarkServerToken) missing.push("POSTMARK_SERVER_TOKEN");
+  if (!config.cronSecret) missing.push("CRON_SECRET");
+  if (config.superAdminPassword === "admin123") missing.push("SUPER_ADMIN_PASSWORD");
+
+  if (missing.length > 0) {
+    throw new Error(`Missing or unsafe production configuration: ${missing.join(", ")}`);
+  }
+}

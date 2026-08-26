@@ -5,7 +5,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: "#F8FAFC",
+        bg: "#F7F8FA",
         surface: "#FFFFFF",
         primary: {
           DEFAULT: "rgb(var(--color-primary) / <alpha-value>)",
@@ -14,14 +14,14 @@ export default {
         success: "#16A34A",
         warning: "#D97706",
         danger: "#DC2626",
-        ink: "#0F172A",
-        muted: "#64748B",
+        ink: "#101827",
+        muted: "#667085",
       },
       borderRadius: {
         DEFAULT: "10px",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        sans: ["DM Sans", "Segoe UI", "sans-serif"],
       },
     },
   },

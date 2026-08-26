@@ -3,6 +3,8 @@ import { sendEmail } from "../../lib/postmark.js";
 import { sendSms } from "../../lib/sms.js";
 import { renderTemplate } from "./render.js";
 import { notFound } from "../../lib/errors.js";
+import { deductCredit } from "../../lib/billing.js";
+import { acquireJobLease, releaseJobLease } from "../../lib/job-lock.js";
 import type { WorkflowStep } from "@autocollect/shared";
 
 type InvoiceForEngine = {
@@ -147,34 +149,100 @@ async function processOne(
   });
 
   const channel = step.channel === "sms" ? "sms" : "email";
-  let providerMsgId: string;
-  if (channel === "sms") {
-    if (!inv.customer_phone) return "noop"; // no recipient — retry next scan
-    if (inv.customer_sms_opt_out) return "noop"; // respect opt-out
-    const body = rendered.body.replace(/\s+/g, " ").trim().slice(0, 160);
-    providerMsgId = (await sendSms({ to: inv.customer_phone, body })).providerMsgId;
-  } else {
-    if (!inv.customer_email) return "noop"; // no recipient — retry next scan
-    providerMsgId = (
-      await sendEmail({
-        to: inv.customer_email,
-        subject: rendered.subject,
-        text: rendered.body,
-        tag: `invoice-${inv.external_id ?? inv.id}`,
-      })
-    ).providerMsgId;
+  if (channel === "sms" && (!inv.customer_phone || inv.customer_sms_opt_out)) return "noop";
+  if (channel === "email" && !inv.customer_email) return "noop";
+  const recipient = channel === "sms" ? inv.customer_phone : inv.customer_email;
+  if (!recipient) return "noop";
+
+  const claimClient = await servicePool.connect();
+  try {
+    await claimClient.query("BEGIN");
+    const creditAvailable = await deductCredit(claimClient, inv.tenant_id, "dunning_send", inv.id);
+    if (!creditAvailable) {
+      await claimClient.query("ROLLBACK");
+      await servicePool
+        .query(
+          `INSERT INTO audit_log (tenant_id, actor, action, detail)
+           VALUES ($1, 'system', 'dunning_skipped_no_credits', $2::jsonb)`,
+          [
+            inv.tenant_id,
+            JSON.stringify({
+              invoice_id: inv.id,
+              step_index: inv.next_step_index,
+              channel: step.channel,
+            }),
+          ],
+        )
+        .catch(() => {});
+      return "noop";
+    }
+
+    const claimed = await claimClient.query(
+      `INSERT INTO messages (tenant_id, invoice_id, step_index, channel, status)
+       VALUES ($1, $2, $3, $4, 'sending')
+       ON CONFLICT (tenant_id, invoice_id, step_index) WHERE step_index IS NOT NULL DO NOTHING
+       RETURNING id`,
+      [inv.tenant_id, inv.id, inv.next_step_index, channel],
+    );
+    if (claimed.rows.length === 0) {
+      await claimClient.query("ROLLBACK");
+      return "noop";
+    }
+    await claimClient.query("COMMIT");
+  } catch (err) {
+    await claimClient.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    claimClient.release();
   }
 
-  // Idempotent send record: a unique index blocks a second send for the same
-  // invoice+step (e.g. overlapping scans or a crash between send and advance).
-  const inserted = await servicePool.query(
-    `INSERT INTO messages (tenant_id, invoice_id, step_index, channel, provider_msg_id, status, sent_at)
-     VALUES ($1, $2, $3, $4, $5, 'sent', now())
-     ON CONFLICT (tenant_id, invoice_id, step_index) WHERE step_index IS NOT NULL DO NOTHING
-     RETURNING id`,
-    [inv.tenant_id, inv.id, inv.next_step_index, channel, providerMsgId],
+  let providerMsgId: string;
+  try {
+    if (channel === "sms") {
+      const body = rendered.body.replace(/\s+/g, " ").trim().slice(0, 160);
+      providerMsgId = (await sendSms({ to: recipient, body })).providerMsgId;
+    } else {
+      providerMsgId = (
+        await sendEmail({
+          to: recipient,
+          subject: rendered.subject,
+          text: rendered.body,
+          tag: `invoice-${inv.external_id ?? inv.id}`,
+        })
+      ).providerMsgId;
+    }
+  } catch (err) {
+    const settleClient = await servicePool.connect();
+    try {
+      await settleClient.query("BEGIN");
+      await settleClient.query(
+        `UPDATE messages SET status = 'failed'
+         WHERE tenant_id = $1 AND invoice_id = $2 AND step_index = $3 AND status = 'sending'`,
+        [inv.tenant_id, inv.id, inv.next_step_index],
+      );
+      await settleClient.query(
+        `UPDATE credit_wallets SET balance = balance + 1, updated_at = now() WHERE tenant_id = $1`,
+        [inv.tenant_id],
+      );
+      await settleClient.query(
+        `INSERT INTO credit_transactions (tenant_id, delta, reason, reference_id, actor, created_at)
+         VALUES ($1, 1, 'dunning_send_failed', $2, 'engine', now())`,
+        [inv.tenant_id, inv.id],
+      );
+      await settleClient.query("COMMIT");
+    } catch {
+      await settleClient.query("ROLLBACK").catch(() => {});
+    } finally {
+      settleClient.release();
+    }
+    throw err;
+  }
+
+  await servicePool.query(
+    `UPDATE messages SET provider_msg_id = $1, status = 'sent', sent_at = now()
+     WHERE tenant_id = $2 AND invoice_id = $3 AND step_index = $4 AND status = 'sending'`,
+    [providerMsgId, inv.tenant_id, inv.id, inv.next_step_index],
   );
-  if (inserted.rows.length === 0) return "noop"; // already sent this step
 
   await servicePool.query(
     `INSERT INTO audit_log (tenant_id, actor, action, detail)
@@ -213,6 +281,10 @@ async function processOne(
  * Returns the number of emails/SMS sent.
  */
 export async function runDunning(now = new Date()): Promise<number> {
+  const acquired = await acquireJobLease("dunning");
+  if (!acquired) return 0;
+
+  try {
   const candidates = await servicePool.query<InvoiceForEngine>(
     `${INVOICE_SELECT} WHERE i.status = 'open' AND i.next_step_index < 9999`,
   );
@@ -240,7 +312,10 @@ export async function runDunning(now = new Date()): Promise<number> {
     }
   }
 
-  return sent;
+    return sent;
+  } finally {
+    await releaseJobLease("dunning").catch(() => {});
+  }
 }
 
 /** Manual "send now" for a single invoice (admin-triggered). */

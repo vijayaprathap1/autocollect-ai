@@ -1,4 +1,5 @@
 import { pool, query } from "../lib/db.js";
+import { hashPassword } from "../lib/auth.js";
 
 const DEV_USER = process.env.SEED_DEV_USER ?? "dev-user@autocollect.local";
 const DEV_TENANT_SLUG = "acme";
@@ -27,6 +28,7 @@ const TEMPLATE_BODIES: Record<string, string> = {
 };
 
 export async function seed(): Promise<void> {
+  const demoPasswordHash = await hashPassword("dev-password-auto");
   const tenantResult = await query(
     `INSERT INTO tenants (name, slug, tone)
      VALUES ($1, $2, 'friendly')
@@ -37,10 +39,23 @@ export async function seed(): Promise<void> {
   const tenantId = tenantResult.rows[0].id as string;
 
   await query(
-    `INSERT INTO users (tenant_id, clerk_user_id, email, role)
-     VALUES ($1, $2, $2, 'owner')
-     ON CONFLICT (clerk_user_id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, role = EXCLUDED.role`,
-    [tenantId, DEV_USER],
+    `INSERT INTO users (email, password_hash, display_name, status, email_verified_at)
+     VALUES ($1, $2, 'Dev User', 'active', now())
+     ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash`,
+    [DEV_USER, demoPasswordHash],
+  );
+
+  const userResult = await query<{ id: string }>(
+    `SELECT id FROM users WHERE email = $1`,
+    [DEV_USER],
+  );
+  const userId = userResult.rows[0].id;
+
+  await query(
+    `INSERT INTO memberships (user_id, tenant_id, role, status)
+     VALUES ($1, $2, 'owner', 'active')
+     ON CONFLICT (user_id, tenant_id) DO NOTHING`,
+    [userId, tenantId],
   );
 
   // Templates (one per step), approved=false so the approve-once flow is meaningful

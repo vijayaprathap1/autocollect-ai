@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
-import { getBilling, billingCheckout, getIntegrations, importCsv, qboConnect, qboSync, stripeConnect, getMembers, addMember, updateBranding } from "@/lib/api";
+import { getBilling, billingCheckout, getIntegrations, importCsv, qboConnect, qboSync, stripeConnect, getMembers, sendInvitation, getInvitations, revokeInvitation, updateBranding } from "@/lib/api";
 import { useMe } from "@/lib/me";
 
 function CsvCard() {
@@ -95,7 +95,8 @@ export function Settings() {
   });
 
   const { data: billing } = useQuery({ queryKey: ["billing"], queryFn: getBilling });
-  const { data: membersData, refetch: refetchMembers } = useQuery({ queryKey: ["members"], queryFn: getMembers });
+  const { data: membersData } = useQuery({ queryKey: ["members"], queryFn: getMembers });
+  const { data: invitationsData, refetch: refetchInvitations } = useQuery({ queryKey: ["invitations"], queryFn: getInvitations });
 
   const connected = searchParams.get("stripe") === "connected";
   const connectFailed = searchParams.get("stripe") === "error";
@@ -159,13 +160,12 @@ export function Settings() {
     setMemberBusy(true);
     setMemberMsg(null);
     try {
-      await addMember(memberEmail);
+      await sendInvitation(memberEmail);
       setMemberEmail("");
-      setMemberMsg("Invited.");
-      await refetchMembers();
-      await queryClient.invalidateQueries({ queryKey: ["me"] });
+      setMemberMsg("Invitation sent.");
+      await refetchInvitations();
     } catch (err) {
-      setMemberMsg(err instanceof Error ? err.message : "Failed to invite member");
+      setMemberMsg(err instanceof Error ? err.message : "Failed to send invitation");
     } finally {
       setMemberBusy(false);
     }
@@ -347,12 +347,36 @@ export function Settings() {
             {(membersData?.members ?? []).map((m) => (
               <li key={m.id} className="flex items-center justify-between py-2 text-sm">
                 <div>
-                  <div className="font-medium">{m.email ?? m.id}</div>
+                  <div className="font-medium">{m.email}</div>
                   <div className="text-xs text-muted">{m.role}</div>
                 </div>
               </li>
             ))}
           </ul>
+          {(invitationsData?.invitations ?? []).length > 0 && (
+            <>
+              <div className="mt-3 mb-1 text-xs font-medium text-muted uppercase tracking-wider">Pending invitations</div>
+              <ul className="divide-y divide-slate-100">
+                {invitationsData!.invitations.map((inv) => (
+                  <li key={inv.id} className="flex items-center justify-between py-2 text-sm">
+                    <div>
+                      <div className="font-medium text-muted">{inv.email}</div>
+                      <div className="text-xs text-muted">Invited as {inv.role}</div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        await revokeInvitation(inv.id);
+                        await refetchInvitations();
+                      }}
+                      className="text-xs text-red-600 hover:underline cursor-pointer"
+                    >
+                      Revoke
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
           <div className="mt-3 flex gap-2">
             <input
               value={memberEmail}
@@ -361,7 +385,7 @@ export function Settings() {
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             />
             <Button onClick={inviteMember} disabled={memberBusy || !memberEmail.trim()}>
-              {memberBusy ? "Adding…" : "Invite"}
+              {memberBusy ? "Sending..." : "Invite"}
             </Button>
           </div>
           {memberMsg && <div className="mt-2 text-sm text-muted">{memberMsg}</div>}

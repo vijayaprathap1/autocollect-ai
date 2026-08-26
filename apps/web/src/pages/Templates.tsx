@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
-import { draftTemplates, getTemplates, updateTemplate, type TemplateDto } from "@/lib/api";
+import {
+  draftTemplates,
+  getTemplates,
+  getWorkflows,
+  updateTemplate,
+  updateWorkflow,
+  type TemplateDto,
+} from "@/lib/api";
 
 function TemplateRow({ template }: { template: TemplateDto }) {
   const [subject, setSubject] = useState(template.subject);
@@ -32,8 +39,25 @@ function TemplateRow({ template }: { template: TemplateDto }) {
     setSaving(true);
     setError(null);
     try {
-      await updateTemplate(template.id, { subject, body, approved: true });
+      const response = await updateTemplate(template.id, { subject, body, approved: true });
+      queryClient.setQueryData<{ templates: TemplateDto[] }>(["templates"], (current) => {
+        if (!current) return current;
+        return {
+          templates: current.templates.map((item) =>
+            item.id === response.template.id ? response.template : item,
+          ),
+        };
+      });
       setSaved(true);
+      const templates = queryClient.getQueryData<{ templates: TemplateDto[] }>(["templates"]);
+      if (templates?.templates.every((item) => item.approved)) {
+        const workflows = await getWorkflows();
+        const defaultWorkflow = workflows.workflows.find((workflow) => workflow.isDefault);
+        if (defaultWorkflow && !defaultWorkflow.enabled) {
+          await updateWorkflow(defaultWorkflow.id, { enabled: true });
+          await queryClient.invalidateQueries({ queryKey: ["workflows"] });
+        }
+      }
       await queryClient.invalidateQueries({ queryKey: ["me"] });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Approve failed");

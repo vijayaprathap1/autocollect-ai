@@ -1,4 +1,5 @@
 import { config } from "../config.js";
+import { fetchWithTimeout } from "./http.js";
 
 /**
  * Postmark client (minimal, via HTTP).
@@ -12,6 +13,7 @@ export type SendEmailInput = {
   to: string;
   subject: string;
   text: string;
+  html?: string;
   tag?: string;
 };
 
@@ -20,7 +22,7 @@ export async function sendEmail(input: SendEmailInput): Promise<{ providerMsgId:
     return { providerMsgId: `dev-${Math.random().toString(36).slice(2, 10)}` };
   }
 
-  const res = await fetch("https://api.postmarkapp.com/email", {
+  const res = await fetchWithTimeout("https://api.postmarkapp.com/email", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -32,10 +34,11 @@ export async function sendEmail(input: SendEmailInput): Promise<{ providerMsgId:
       To: input.to,
       Subject: input.subject,
       TextBody: input.text,
+      HtmlBody: input.html,
       MessageStream: "outbound",
       Tag: input.tag,
     }),
-  });
+  }, config.providerTimeoutMs);
 
   if (!res.ok) {
     const detail = await res.text();

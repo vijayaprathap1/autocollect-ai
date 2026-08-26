@@ -5,9 +5,11 @@ import { stripe, stripeEnabled, stripeOAuthRedirectUri } from "../../lib/stripe.
 import { servicePool } from "../../lib/db.js";
 import { badRequest, notFound } from "../../lib/errors.js";
 import { decodeState, encodeState } from "../../lib/oauth.js";
+import { extractCookieToken } from "../../lib/auth.js";
 import { PLAN_KEYS, setTenantPlan, type PlanKey } from "../../lib/billing.js";
 import { smsEnabled } from "../../lib/sms.js";
 import { ingestStripeInvoice, markInvoicePaid, tenantByStripeAccount } from "./ingest.service.js";
+import { claimWebhookEvent, completeWebhookEvent, failWebhookEvent } from "../../lib/webhook-events.js";
 
 const MOCK_ACCOUNT_ID = "acct_dev_mock";
 
@@ -72,7 +74,9 @@ export async function stripeRoutes(app: FastifyInstance) {
     "/integrations/stripe/connect",
     { preHandler: requireRole("admin") },
     async (req) => {
-      const state = encodeState(req.user.tenantId);
+      const sessionToken = extractCookieToken(req);
+      if (!sessionToken) throw badRequest("Missing session cookie");
+      const state = await encodeState(req.user.tenantId, "stripe", sessionToken);
       let url: string;
 
       if (stripeEnabled) {
@@ -109,7 +113,9 @@ export async function stripeRoutes(app: FastifyInstance) {
     }
     if (!q.code || !q.state) throw badRequest("Missing code or state");
 
-    const tenantId = decodeState(q.state);
+    const sessionToken = extractCookieToken(req);
+    if (!sessionToken) throw badRequest("Missing session cookie");
+    const tenantId = await decodeState(q.state, "stripe", sessionToken);
     let stripeAccountId: string;
 
     if (stripeEnabled) {
@@ -180,8 +186,9 @@ export async function stripeRoutes(app: FastifyInstance) {
         }) ?? {};
         const tenantId = session.metadata?.tenantId ?? session.client_reference_id;
         if (tenantId) {
-          const idem = await servicePool.query(`SELECT 1 FROM webhook_events WHERE id = $1`, [event.id]);
-          if (idem.rows.length === 0) {
+          const claimed = await claimWebhookEvent(event.id, "stripe", tenantId);
+          if (claimed) {
+            try {
             let plan: PlanKey | null = null;
             if (event.type === "checkout.session.completed") {
               plan = planFromSession(session);
@@ -203,10 +210,11 @@ export async function stripeRoutes(app: FastifyInstance) {
                 [tenantId, JSON.stringify({ from: prev.rows[0]?.plan ?? "starter", to: plan, method: event.type })],
               );
             }
-            await servicePool.query(
-              `INSERT INTO webhook_events (id, tenant_id, source) VALUES ($1, $2, 'stripe')`,
-              [event.id, tenantId],
-            );
+              await completeWebhookEvent(event.id);
+            } catch (err) {
+              await failWebhookEvent(event.id, err).catch(() => {});
+              throw err;
+            }
           }
         }
         return reply.send({ received: true });
@@ -232,8 +240,9 @@ export async function stripeRoutes(app: FastifyInstance) {
         lines?: { data?: { description?: string | null; quantity?: number | null; amount?: number }[] };
       }) ?? {};
 
-      const idem = await servicePool.query(`SELECT 1 FROM webhook_events WHERE id = $1`, [event.id]);
-      if (idem.rows.length === 0) {
+      const claimed = await claimWebhookEvent(event.id, "stripe", conn.tenantId);
+      if (claimed) {
+        try {
         if (event.type === "invoice.paid" && inv.id) {
           await markInvoicePaid(conn.tenantId, inv.id);
         } else if (event.type === "invoice.created" || event.type === "invoice.updated") {
@@ -256,10 +265,11 @@ export async function stripeRoutes(app: FastifyInstance) {
             })),
           });
         }
-        await servicePool.query(
-          `INSERT INTO webhook_events (id, tenant_id, source) VALUES ($1, $2, 'stripe')`,
-          [event.id, conn.tenantId],
-        );
+          await completeWebhookEvent(event.id);
+        } catch (err) {
+          await failWebhookEvent(event.id, err).catch(() => {});
+          throw err;
+        }
       }
 
       return reply.send({ received: true });

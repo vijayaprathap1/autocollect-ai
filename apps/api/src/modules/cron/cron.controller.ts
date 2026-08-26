@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { config } from "../../config.js";
 import { unauthorized } from "../../lib/errors.js";
+import { pool } from "../../lib/db.js";
 import { runDunning } from "../workflows/engine.js";
 import { syncAllQuickBooks } from "../integrations/qbo.sync.service.js";
 
@@ -21,7 +22,11 @@ export async function cronRoutes(app: FastifyInstance) {
       if (header !== config.cronSecret) throw unauthorized("Invalid cron secret", "INVALID_CRON_SECRET");
       const sent = await runDunning();
       const qbo = await syncAllQuickBooks();
-      return { ok: true, sent, qbo };
+      // Cleanup expired sessions
+      const cleaned = await pool.query(
+        `DELETE FROM sessions WHERE expires_at < now()`,
+      );
+      return { ok: true, sent, qbo, sessionsCleaned: cleaned.rowCount ?? 0 };
     },
   });
 }

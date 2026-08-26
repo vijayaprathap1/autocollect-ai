@@ -32,13 +32,13 @@ export async function customerRoutes(app: FastifyInstance) {
         WHERE c.tenant_id = $1
           AND ($2::text IS NULL OR c.name ILIKE '%' || $2 || '%' OR c.email ILIKE '%' || $2 || '%')
         GROUP BY c.id
-        ORDER BY open_total DESC, c.created_at DESC
-        LIMIT $3 OFFSET $4`,
+        ORDER BY open_total DESC, c.created_at DESC, c.id
+        LIMIT ($3 + 1) OFFSET $4`,
       [req.user.tenantId, q.q ?? null, limit, offset],
     );
 
     return {
-      customers: rows.rows.map((r) => ({
+      customers: rows.rows.slice(0, limit).map((r) => ({
         id: r.id,
         name: r.name,
         email: r.email,
@@ -52,6 +52,7 @@ export async function customerRoutes(app: FastifyInstance) {
       })),
       limit,
       offset,
+      hasMore: rows.rows.length > limit,
     };
   });
 }

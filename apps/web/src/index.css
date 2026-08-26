@@ -4,10 +4,11 @@
 
 :root {
   color-scheme: light;
-  --color-primary: 37 99 235; /* #2563EB */
-  --color-primary-hover: 29 78 216; /* #1D4ED8 */
+  --color-primary: 5 55 170;
+  --color-primary-hover: 3 40 128;
 }
 
 body {
   @apply bg-bg text-ink font-sans antialiased;
+  font-family: "DM Sans", "Segoe UI", sans-serif;
 }

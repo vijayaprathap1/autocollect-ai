@@ -1,11 +1,16 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import "./index.css";
-import { Shell, PublicOutlet } from "./App";
-import { Landing } from "./pages/Landing";
+import { Shell, AdminShell, PublicRoute } from "./App";
 import { Login } from "./pages/Login";
+import { AdminLogin } from "./pages/AdminLogin";
+import { ForgotPassword } from "./pages/ForgotPassword";
+import { ResetPassword } from "./pages/ResetPassword";
+import { VerifyEmail } from "./pages/VerifyEmail";
+import { AcceptInvite } from "./pages/AcceptInvite";
+import { AdminConsole } from "./pages/AdminConsole";
 import { Dashboard } from "./pages/Dashboard";
 import { Invoices } from "./pages/Invoices";
 import { InvoiceDetail } from "./pages/InvoiceDetail";
@@ -29,9 +34,14 @@ createRoot(document.getElementById("root")!).render(
       <ToastProvider>
         <BrowserRouter>
           <Routes>
-            <Route element={<PublicOutlet />}>
-              <Route path="/" element={<Landing />} />
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route element={<PublicRoute />}>
               <Route path="/login" element={<Login />} />
+              <Route path="/admin/login" element={<AdminLogin />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
+              <Route path="/accept-invite" element={<AcceptInvite />} />
             </Route>
             <Route element={<Shell />}>
               <Route path="/dashboard" element={<Dashboard />} />
@@ -43,6 +53,9 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/activity" element={<Activity />} />
               <Route path="/replies" element={<Replies />} />
               <Route path="/settings" element={<Settings />} />
+            </Route>
+            <Route element={<AdminShell />}>
+              <Route path="/admin" element={<AdminConsole />} />
             </Route>
           </Routes>
         </BrowserRouter>

@@ -1,4 +1,5 @@
 import { config } from "../config.js";
+import { fetchWithTimeout } from "./http.js";
 
 /**
  * QuickBooks Online OAuth2 + V3 query client.
@@ -40,7 +41,7 @@ const basicAuth = () =>
   "Basic " + Buffer.from(`${config.qboClientId}:${config.qboClientSecret}`).toString("base64");
 
 async function requestTokens(form: URLSearchParams): Promise<QboTokens> {
-  const res = await fetch(TOKEN_URL, {
+  const res = await fetchWithTimeout(TOKEN_URL, {
     method: "POST",
     headers: {
       Authorization: basicAuth(),
@@ -48,7 +49,7 @@ async function requestTokens(form: URLSearchParams): Promise<QboTokens> {
       Accept: "application/json",
     },
     body: form.toString(),
-  });
+  }, config.providerTimeoutMs);
   if (!res.ok) {
     const detail = await res.text();
     throw new Error(`QBO token error ${res.status}: ${detail.slice(0, 300)}`);
@@ -108,12 +109,12 @@ export async function qboQueryInvoices(
     `SELECT * FROM Invoice${where}`,
   )}`;
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: "application/json",
     },
-  });
+  }, config.providerTimeoutMs);
   if (!res.ok) {
     const detail = await res.text();
     throw new Error(`QBO query error ${res.status}: ${detail.slice(0, 300)}`);

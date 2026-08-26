@@ -4,6 +4,7 @@ import { requireRole } from "../../plugins/tenant.js";
 import { servicePool } from "../../lib/db.js";
 import { badRequest } from "../../lib/errors.js";
 import { decodeState, encodeState } from "../../lib/oauth.js";
+import { extractCookieToken } from "../../lib/auth.js";
 import { encryptSecret } from "../../lib/crypto.js";
 import { qboAuthorizeUrl, qboEnabled, qboExchangeCode, type QboTokens } from "../../lib/qbo.js";
 import { syncQuickBooksForTenant } from "./qbo.sync.service.js";
@@ -18,7 +19,9 @@ export async function qboRoutes(app: FastifyInstance) {
     "/integrations/qbo/connect",
     { preHandler: requireRole("admin") },
     async (req) => {
-      const state = encodeState(req.user.tenantId);
+      const sessionToken = extractCookieToken(req);
+      if (!sessionToken) throw badRequest("Missing session cookie");
+      const state = await encodeState(req.user.tenantId, "qbo", sessionToken);
       const url = qboEnabled
         ? qboAuthorizeUrl(state)
         : `${config.appUrl}/integrations/qbo/callback?state=${encodeURIComponent(
@@ -43,7 +46,9 @@ export async function qboRoutes(app: FastifyInstance) {
       }
       if (!q.code || !q.state || !q.realmId) throw badRequest("Missing code, state or realmId");
 
-      const tenantId = decodeState(q.state);
+      const sessionToken = extractCookieToken(req);
+      if (!sessionToken) throw badRequest("Missing session cookie");
+      const tenantId = await decodeState(q.state, "qbo", sessionToken);
       const realmId = q.realmId;
 
       let tokens: { accessToken: string; refreshToken: string; expiresAt: string } | null = null;

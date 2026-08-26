@@ -15,23 +15,9 @@ export class ApiClientError extends Error {
   }
 }
 
-const DEV_USER_KEY = "autocollect.dev-user";
-
-export function getDevUser(): string | null {
-  return localStorage.getItem(DEV_USER_KEY);
-}
-export function setDevUser(email: string): void {
-  localStorage.setItem(DEV_USER_KEY, email);
-}
-export function clearDevUser(): void {
-  localStorage.removeItem(DEV_USER_KEY);
-}
-
 function headers(json: boolean): Record<string, string> {
   const h: Record<string, string> = {};
   if (json) h["content-type"] = "application/json";
-  const devUser = getDevUser();
-  if (devUser) h["x-dev-user"] = devUser;
   return h;
 }
 
@@ -39,6 +25,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const hasBody = init.body !== undefined && init.body !== null;
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
+    credentials: "same-origin",
     headers: { ...headers(hasBody), ...init.headers },
   });
   if (!res.ok) {
@@ -75,7 +62,7 @@ export type TenantBranding = {
 };
 
 export type MeResponse = {
-  user: { id: string; role: string; email: string };
+  user: { id: string; role: string; email: string; isSuperAdmin: boolean; sessionType?: "tenant" | "admin" };
   tenant: {
     id: string;
     name: string;
@@ -90,6 +77,8 @@ export type MeResponse = {
     workflowEnabled: boolean;
     hasUnapprovedTemplates: boolean;
     invoiceCount: number;
+    creditBalance: number;
+    creditsPerMonth: number;
   } | null;
   templates: { approvedTemplates: number; totalTemplates: number };
 };
@@ -143,15 +132,18 @@ export type CustomerDto = {
   paidCount: number;
 };
 
-export async function getCustomers(params?: { q?: string }): Promise<{
+export async function getCustomers(params?: { q?: string; limit?: number; offset?: number }): Promise<{
   customers: CustomerDto[];
   limit: number;
   offset: number;
+  hasMore: boolean;
 }> {
   const sp = new URLSearchParams();
   if (params?.q) sp.set("q", params.q);
+  if (params?.limit !== undefined) sp.set("limit", String(params.limit));
+  if (params?.offset !== undefined) sp.set("offset", String(params.offset));
   const qs = sp.toString();
-  return api.get<{ customers: CustomerDto[]; limit: number; offset: number }>(
+  return api.get<{ customers: CustomerDto[]; limit: number; offset: number; hasMore: boolean }>(
     `/customers${qs ? `?${qs}` : ""}`,
   );
 }
@@ -176,17 +168,21 @@ export type InvoiceDto = {
   updatedAt: string;
 };
 
-export type InvoiceListResponse = { invoices: InvoiceDto[]; limit: number; offset: number };
+export type InvoiceListResponse = { invoices: InvoiceDto[]; limit: number; offset: number; hasMore: boolean };
 
 export async function getInvoices(params?: {
   status?: string;
   source?: string;
   q?: string;
+  limit?: number;
+  offset?: number;
 }): Promise<InvoiceListResponse> {
   const sp = new URLSearchParams();
   if (params?.status) sp.set("status", params.status);
   if (params?.source) sp.set("source", params.source);
   if (params?.q) sp.set("q", params.q);
+  if (params?.limit !== undefined) sp.set("limit", String(params.limit));
+  if (params?.offset !== undefined) sp.set("offset", String(params.offset));
   const qs = sp.toString();
   return api.get<InvoiceListResponse>(`/invoices${qs ? `?${qs}` : ""}`);
 }
@@ -267,6 +263,25 @@ export async function draftTemplates(): Promise<{
   return api.post<{ drafts: { stepKey: string; subject: string; body: string }[] }>("/templates/draft");
 }
 
+export type DashboardRangeKey = "7d" | "30d" | "90d";
+
+export type DashboardRange = {
+  from: string;
+  to: string;
+  asOf: string;
+  lastUpdatedAt: string | null;
+};
+
+export type DashboardCurrency = string;
+
+export type DashboardCredits = {
+  balance: number;
+  monthlyAllowance: number;
+  periodStart: string | null;
+  periodEnd: string | null;
+  subscriptionStatus: string | null;
+};
+
 export type DashboardSummaryDto = {
   outstandingTotal: number;
   overdueTotal: number;
@@ -275,10 +290,14 @@ export type DashboardSummaryDto = {
   aging: { bucket: string; count: number; amount: number }[];
   openCount: number;
   paidCount30d: number;
+  range: DashboardRange;
+  currency: DashboardCurrency;
+  credits: DashboardCredits;
 };
 
-export async function getDashboard(): Promise<DashboardSummaryDto> {
-  return api.get<DashboardSummaryDto>("/dashboard");
+export async function getDashboard(range: DashboardRangeKey = "30d"): Promise<DashboardSummaryDto> {
+  const params = new URLSearchParams({ range });
+  return api.get<DashboardSummaryDto>(`/dashboard?${params.toString()}`);
 }
 
 export type ActivityResponse = {
@@ -354,6 +373,35 @@ export async function addMember(email: string, role = "member"): Promise<{ membe
   return api.post<{ member: MemberDto }>("/users", { email, role });
 }
 
+export type InvitationDto = {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  expiresAt: string;
+  createdAt: string;
+};
+
+export async function getInvitations(): Promise<{ invitations: InvitationDto[] }> {
+  return api.get<{ invitations: InvitationDto[] }>("/invitations");
+}
+
+export async function sendInvitation(email: string, role = "member"): Promise<{ invitation: InvitationDto }> {
+  return api.post<{ invitation: InvitationDto }>("/invitations", { email, role });
+}
+
+export async function revokeInvitation(id: string): Promise<{ ok: boolean }> {
+  return api.del<{ ok: boolean }>(`/invitations/${id}`);
+}
+
+export async function acceptInvitation(id: string, token: string): Promise<{ ok: boolean; message: string }> {
+  return api.post<{ ok: boolean; message: string }>(`/invitations/${id}/accept`, { token });
+}
+
+export async function createOrganization(name: string): Promise<{ ok: boolean; tenantId: string; tenantSlug: string; role: string }> {
+  return api.post<{ ok: boolean; tenantId: string; tenantSlug: string; role: string }>("/auth/create-organization", { name });
+}
+
 export async function updateBranding(
   branding: Partial<TenantBranding>,
 ): Promise<{ branding: TenantBranding; plan: string }> {
@@ -372,10 +420,9 @@ export async function importCsv(file: File): Promise<{
 }> {
   const fd = new FormData();
   fd.append("file", file);
-  const devUser = getDevUser();
   const res = await fetch(`${API_BASE}/integrations/csv/import`, {
     method: "POST",
-    headers: devUser ? { "x-dev-user": devUser } : {},
+    credentials: "same-origin",
     body: fd,
   });
   if (!res.ok) {

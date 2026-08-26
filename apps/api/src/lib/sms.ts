@@ -1,4 +1,5 @@
 import { config } from "../config.js";
+import { fetchWithTimeout } from "./http.js";
 
 /**
  * Twilio SMS client (minimal, via HTTP).
@@ -21,7 +22,7 @@ export async function sendSms(input: SendSmsInput): Promise<{ providerMsgId: str
   }
 
   const auth = "Basic " + Buffer.from(`${config.twilioAccountSid}:${config.twilioAuthToken}`).toString("base64");
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `https://api.twilio.com/2010-04-01/Accounts/${config.twilioAccountSid}/Messages.json`,
     {
       method: "POST",
@@ -35,6 +36,7 @@ export async function sendSms(input: SendSmsInput): Promise<{ providerMsgId: str
         Body: input.body,
       }).toString(),
     },
+    config.providerTimeoutMs,
   );
 
   if (!res.ok) {

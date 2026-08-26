@@ -1,6 +1,7 @@
 import { servicePool } from "../../lib/db.js";
 import { classifyReply, suggestReply } from "../../lib/ai.js";
 import type { ReplyClassification } from "@autocollect/shared";
+import { claimWebhookEvent, completeWebhookEvent, failWebhookEvent } from "../../lib/webhook-events.js";
 
 export type PostmarkInboundPayload = {
   MessageID?: string;
@@ -45,13 +46,10 @@ export type InboundResult = {
 export async function processInboundEmail(payload: PostmarkInboundPayload): Promise<InboundResult> {
   const messageId = payload.MessageID;
   if (messageId) {
-    const inserted = await servicePool.query(
-      `INSERT INTO webhook_events (id, source) VALUES ($1, 'postmark')
-       ON CONFLICT (id) DO NOTHING`,
-      [messageId],
-    );
-    if ((inserted.rowCount ?? 0) === 0) return { matched: false }; // duplicate
+    if (!(await claimWebhookEvent(messageId, "postmark"))) return { matched: false };
   }
+
+  try {
 
   const content = payload.StrippedTextReply || payload.TextBody || "";
   if (!content.trim()) return { matched: false };
@@ -150,10 +148,16 @@ export async function processInboundEmail(payload: PostmarkInboundPayload): Prom
     );
   }
 
-  return {
+  const result = {
     matched: true,
     classification: classification.classification,
     promiseDate: classification.promiseDate,
     invoiceId: resolved.invoice_id,
   };
+  if (messageId) await completeWebhookEvent(messageId);
+  return result;
+  } catch (err) {
+    if (messageId) await failWebhookEvent(messageId, err).catch(() => {});
+    throw err;
+  }
 }

@@ -10,6 +10,7 @@ import { ApiError } from "./lib/errors.js";
 import tenantPlugin from "./plugins/tenant.js";
 import { healthRoutes } from "./modules/health.js";
 import { meRoutes } from "./modules/auth/me.js";
+import { authRoutes } from "./modules/auth/auth.controller.js";
 import { stripeRoutes } from "./modules/integrations/stripe.controller.js";
 import { csvRoutes } from "./modules/integrations/csv.controller.js";
 import { qboRoutes } from "./modules/integrations/qbo.controller.js";
@@ -26,6 +27,7 @@ import { settingsRoutes } from "./modules/settings/settings.controller.js";
 import { customerRoutes } from "./modules/customers/customers.controller.js";
 import { cronRoutes } from "./modules/cron/cron.controller.js";
 import { demoRoutes } from "./modules/demo/demo.controller.js";
+import { adminRoutes } from "./modules/admin/admin.controller.js";
 
 export function buildApp() {
   const app = Fastify({
@@ -72,6 +74,12 @@ export function buildApp() {
 
   // Per-tenant (or per-IP for public routes) rate limiting. Registered after
   // auth so the tenant key is available for the keyGenerator.
+  app.addHook("onRoute", (route) => {
+    const routeConfig = route.config as { public?: boolean; rateLimit?: unknown } | undefined;
+    if (!routeConfig?.public || !route.url.startsWith("/auth/")) return;
+    routeConfig.rateLimit = { max: 20, timeWindow: "1 minute" };
+  });
+
   void app.register(rateLimit, {
     max: 300,
     timeWindow: "1 minute",
@@ -128,6 +136,7 @@ export function buildApp() {
   });
 
   void app.register(healthRoutes);
+  void app.register(authRoutes);
   void app.register(meRoutes);
   void app.register(stripeRoutes);
   void app.register(csvRoutes);
@@ -145,6 +154,7 @@ export function buildApp() {
   void app.register(customerRoutes);
   void app.register(cronRoutes);
   void app.register(demoRoutes);
+  void app.register(adminRoutes);
 
   return app;
 }

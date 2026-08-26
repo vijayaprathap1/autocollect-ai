@@ -1,6 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { config } from "../config.js";
 import { badRequest } from "./errors.js";
+import { servicePool } from "./db.js";
+import { generateToken, hashToken } from "./auth.js";
 
 const STATE_TTL_MS = 15 * 60 * 1000;
 const FALLBACK_SECRET = "dev-state-secret";
@@ -17,15 +19,22 @@ function sign(payload: string): string {
 }
 
 /** Encode the tenant id into an opaque, signed OAuth `state` token. */
-export function encodeState(tenantId: string): string {
+export async function encodeState(tenantId: string, provider: "stripe" | "qbo", sessionToken: string): Promise<string> {
+  const token = generateToken();
   const payload = Buffer.from(
-    JSON.stringify({ tenantId, exp: Date.now() + STATE_TTL_MS }),
+    JSON.stringify({ token, exp: Date.now() + STATE_TTL_MS }),
   ).toString("base64url");
-  return `${payload}.${sign(payload)}`;
+  const state = `${payload}.${sign(payload)}`;
+  await servicePool.query(
+    `INSERT INTO oauth_states (state_hash, tenant_id, provider, session_hash, expires_at)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [hashToken(state), tenantId, provider, hashToken(sessionToken), new Date(Date.now() + STATE_TTL_MS).toISOString()],
+  );
+  return state;
 }
 
 /** Verify the signature/expiry of an OAuth `state` token and return the tenant id. */
-export function decodeState(state: string): string {
+export async function decodeState(state: string, provider: "stripe" | "qbo", sessionToken: string): Promise<string> {
   const dot = state.lastIndexOf(".");
   if (dot <= 0) throw badRequest("Invalid OAuth state");
   const payload = state.slice(0, dot);
@@ -34,15 +43,22 @@ export function decodeState(state: string): string {
   const a = Buffer.from(sig);
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) throw badRequest("Invalid OAuth state");
-  let parsed: { tenantId?: string; exp?: number };
+  let parsed: { token?: string; exp?: number };
   try {
     parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
   } catch {
     throw badRequest("Invalid OAuth state");
   }
-  if (!parsed.tenantId) throw badRequest("Invalid OAuth state");
-  if (typeof parsed.exp !== "number" || parsed.exp < Date.now()) {
+  if (!parsed.token || typeof parsed.exp !== "number" || parsed.exp < Date.now()) {
     throw badRequest("OAuth state expired, try again");
   }
-  return parsed.tenantId;
+  const claimed = await servicePool.query<{ tenant_id: string }>(
+    `UPDATE oauth_states SET consumed_at = now()
+     WHERE state_hash = $1 AND provider = $2 AND session_hash = $3
+       AND consumed_at IS NULL AND expires_at > now()
+     RETURNING tenant_id`,
+    [hashToken(state), provider, hashToken(sessionToken)],
+  );
+  if (!claimed.rows[0]) throw badRequest("Invalid or already used OAuth state");
+  return claimed.rows[0].tenant_id;
 }

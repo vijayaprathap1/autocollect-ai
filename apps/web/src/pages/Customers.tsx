@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button, Card, EmptyState, Input, PageHeader, Spinner } from "@/components/ui";
+import { Button, Card, EmptyState, Input, PageHeader, Pagination, Spinner } from "@/components/ui";
 import { getCustomers } from "@/lib/api";
 import { formatMoney } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -9,10 +9,12 @@ import { useMe } from "@/lib/me";
 export function Customers() {
   const me = useMe();
   const [q, setQ] = useState("");
+  const [page, setPage] = useState(0);
+  const pageSize = 25;
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["customers", q],
-    queryFn: () => getCustomers({ q: q || undefined }),
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ["customers", q, page],
+    queryFn: () => getCustomers({ q: q || undefined, limit: pageSize, offset: page * pageSize }),
     enabled: Boolean(me.tenant?.invoiceCount),
   });
 
@@ -41,7 +43,10 @@ export function Customers() {
       <Input
         placeholder="Search customer…"
         value={q}
-        onChange={(e) => setQ(e.target.value)}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setPage(0);
+        }}
         className="mb-4 max-w-xs"
       />
 
@@ -79,6 +84,7 @@ export function Customers() {
               ))}
             </tbody>
           </table>
+          <Pagination page={page} hasMore={data?.hasMore ?? false} onPageChange={setPage} disabled={isFetching} />
         </Card>
       )}
     </div>

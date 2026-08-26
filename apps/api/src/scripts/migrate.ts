@@ -5,8 +5,8 @@ import { pool, query } from "../lib/db.js";
 
 const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 
-async function ensureTable() {
-  await query(`
+async function ensureTable(client: { query: (text: string) => Promise<unknown> }) {
+  await client.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       name TEXT PRIMARY KEY,
       applied_at TIMESTAMPTZ DEFAULT now()
@@ -15,31 +15,34 @@ async function ensureTable() {
 }
 
 export async function migrate(): Promise<string[]> {
-  await ensureTable();
-  const files = (await readdir(migrationsDir)).filter((f) => f.endsWith(".sql")).sort();
-  const applied = new Set(
-    (await query<{ name: string }>("SELECT name FROM schema_migrations")).rows.map((r) => r.name),
-  );
-  const done: string[] = [];
-  for (const file of files) {
-    if (applied.has(file)) continue;
-    const sql = await readFile(join(migrationsDir, file), "utf8");
-    await pool.connect().then(async (client) => {
+  const client = await pool.connect();
+  try {
+    await client.query("SELECT pg_advisory_lock(hashtext('autocollect:migrations'))");
+    await ensureTable(client);
+    const files = (await readdir(migrationsDir)).filter((f) => f.endsWith(".sql")).sort();
+    const applied = new Set(
+      (await client.query<{ name: string }>("SELECT name FROM schema_migrations")).rows.map((r) => r.name),
+    );
+    const done: string[] = [];
+    for (const file of files) {
+      if (applied.has(file)) continue;
+      const sql = await readFile(join(migrationsDir, file), "utf8");
+      await client.query("BEGIN");
       try {
-        await client.query("BEGIN");
         await client.query(sql);
         await client.query("INSERT INTO schema_migrations (name) VALUES ($1)", [file]);
         await client.query("COMMIT");
       } catch (e) {
         await client.query("ROLLBACK");
         throw e;
-      } finally {
-        client.release();
       }
-    });
-    done.push(file);
+      done.push(file);
+    }
+    return done;
+  } finally {
+    await client.query("SELECT pg_advisory_unlock(hashtext('autocollect:migrations'))").catch(() => {});
+    client.release();
   }
-  return done;
 }
 
 // Run directly: `npm run db:migrate`

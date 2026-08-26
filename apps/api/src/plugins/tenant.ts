@@ -14,8 +14,8 @@ declare module "fastify" {
 
 /**
  * Authentication + per-request tenant scoping.
- * Public routes (webhooks, health) are marked `{ config: { public: true } }`.
- * Every authed request gets a dedicated connection with `app.tenant_id` set,
+ * Public routes (webhooks, health, auth) are marked `{ config: { public: true } }`.
+ * Every authed request gets a dedicated connection with app.tenant_id set,
  * so Postgres RLS isolates data for the whole request lifetime.
  */
 export default fp(async (app: FastifyInstance) => {
@@ -33,7 +33,7 @@ export default fp(async (app: FastifyInstance) => {
     }
   });
 
-  app.addHook("onResponse", async (req, _reply) => {
+  app.addHook("onResponse", async (req) => {
     const client = (req as { db?: import("pg").PoolClient }).db;
     if (client) {
       try {
@@ -48,9 +48,21 @@ export default fp(async (app: FastifyInstance) => {
 /** Guard a route handler by minimum role. */
 export function requireRole(role: UserRole) {
   return async function roleHook(req: import("fastify").FastifyRequest) {
+    if (req.user.sessionType !== "tenant") {
+      throw forbidden("Tenant session required");
+    }
     const roles: Record<UserRole, number> = { member: 0, admin: 1, owner: 2 };
     if (roles[req.user.role] < roles[role]) {
       throw forbidden(`Requires role: ${role}`);
+    }
+  };
+}
+
+/** Guard a route handler for super admin only. */
+export function requireSuperAdmin() {
+  return async function superAdminHook(req: import("fastify").FastifyRequest) {
+    if (!req.user.isSuperAdmin || req.user.sessionType !== "admin") {
+      throw forbidden("Requires super admin access");
     }
   };
 }

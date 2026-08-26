@@ -3,6 +3,7 @@ dist/
 .pgdata/
 .env
 .env.local
+DEMO-CREDENTIALS.md
 *.log
 .DS_Store
 coverage/

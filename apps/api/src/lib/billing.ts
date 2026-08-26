@@ -2,10 +2,10 @@ import type { PoolClient } from "pg";
 import { ApiError } from "./errors.js";
 
 export const PLANS = {
-  starter: { name: "Starter", invoiceLimit: 50, seatLimit: 1, monthlyPriceCents: 0, whiteLabel: false },
-  growth: { name: "Growth", invoiceLimit: null, seatLimit: 3, monthlyPriceCents: 2900, whiteLabel: false }, // null = unlimited
-  pro: { name: "Pro", invoiceLimit: null, seatLimit: null, monthlyPriceCents: 5900, whiteLabel: false },
-  agency: { name: "Agency", invoiceLimit: null, seatLimit: null, monthlyPriceCents: 19900, whiteLabel: true },
+  starter: { name: "Starter", invoiceLimit: 50, seatLimit: 1, creditsPerMonth: 50, monthlyPriceCents: 0, whiteLabel: false },
+  growth: { name: "Growth", invoiceLimit: null, seatLimit: 3, creditsPerMonth: 500, monthlyPriceCents: 2900, whiteLabel: false },
+  pro: { name: "Pro", invoiceLimit: null, seatLimit: null, creditsPerMonth: 2000, monthlyPriceCents: 5900, whiteLabel: false },
+  agency: { name: "Agency", invoiceLimit: null, seatLimit: null, creditsPerMonth: 10000, monthlyPriceCents: 19900, whiteLabel: true },
 } as const;
 
 export type PlanKey = keyof typeof PLANS;
@@ -84,7 +84,9 @@ export async function assertSeatCapacity(
   const { seatLimit } = await tenantPlan(db, tenantId);
   if (seatLimit === null) return; // unlimited
   const count = await db.query<{ count: number }>(
-    `SELECT count(*)::int AS count FROM users WHERE tenant_id = $1 AND ($2::uuid IS NULL OR id <> $2::uuid)`,
+    `SELECT count(*)::int AS count FROM memberships m
+     WHERE m.tenant_id = $1 AND m.status = 'active'
+     AND ($2::uuid IS NULL OR m.user_id <> $2::uuid)`,
     [tenantId, excludeUserId ?? null],
   );
   if ((count.rows[0]?.count ?? 0) >= seatLimit) {
@@ -94,4 +96,42 @@ export async function assertSeatCapacity(
       `Member limit reached (${seatLimit}). Upgrade your plan for more seats.`,
     );
   }
+}
+
+/** Get the current credit balance for a tenant. */
+export async function getCreditBalance(db: Db, tenantId: string): Promise<number> {
+  const row = await db.query<{ balance: number }>(
+    `SELECT balance FROM credit_wallets WHERE tenant_id = $1`,
+    [tenantId],
+  );
+  return row.rows[0]?.balance ?? 0;
+}
+
+/**
+ * Deduct credits for a send. Returns true if credits were available and deducted,
+ * false if insufficient. Uses SELECT ... FOR UPDATE to prevent races.
+ */
+export async function deductCredit(
+  db: Db,
+  tenantId: string,
+  reason: string,
+  referenceId?: string,
+): Promise<boolean> {
+  const wallet = await db.query<{ balance: number }>(
+    `SELECT balance FROM credit_wallets WHERE tenant_id = $1 FOR UPDATE`,
+    [tenantId],
+  );
+  const balance = wallet.rows[0]?.balance ?? 0;
+  if (balance <= 0) return false;
+
+  await db.query(
+    `UPDATE credit_wallets SET balance = balance - 1, updated_at = now() WHERE tenant_id = $1`,
+    [tenantId],
+  );
+  await db.query(
+    `INSERT INTO credit_transactions (tenant_id, delta, reason, reference_id, actor, created_at)
+     VALUES ($1, -1, $2, $3, 'engine', now())`,
+    [tenantId, reason, referenceId ?? null],
+  );
+  return true;
 }

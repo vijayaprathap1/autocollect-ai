@@ -28,6 +28,7 @@ export type Tenant = {
   clerkOrgId: string | null;
   emailDomain: string | null;
   tone: TenantTone;
+  currency: string;
   createdAt: string;
 };
 
@@ -128,6 +129,21 @@ export type Reply = {
 
 export type AgingBucket = { bucket: string; count: number; amount: number };
 
+export type DashboardRange = {
+  from: string;
+  to: string;
+  asOf: string;
+  lastUpdatedAt: string | null;
+};
+
+export type DashboardCredits = {
+  balance: number;
+  monthlyAllowance: number;
+  periodStart: string | null;
+  periodEnd: string | null;
+  subscriptionStatus: string | null;
+};
+
 export type DashboardSummary = {
   outstandingTotal: number;
   overdueTotal: number;
@@ -136,6 +152,9 @@ export type DashboardSummary = {
   aging: AgingBucket[];
   openCount: number;
   paidCount30d: number;
+  range: DashboardRange;
+  currency: string;
+  credits: DashboardCredits;
 };
 
 export type ApiError = {

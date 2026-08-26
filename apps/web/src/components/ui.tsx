@@ -140,5 +140,43 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
   );
 }
 
+export function Pagination({
+  page,
+  hasMore,
+  onPageChange,
+  disabled = false,
+}: {
+  page: number;
+  hasMore: boolean;
+  onPageChange: (page: number) => void;
+  disabled?: boolean;
+}) {
+  if (page === 0 && !hasMore) return null;
+
+  return (
+    <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
+      <span className="text-sm text-muted">Page {page + 1}</span>
+      <div className="flex gap-2">
+        <Button
+          variant="secondary"
+          className="px-3 py-1.5 text-sm"
+          disabled={disabled || page === 0}
+          onClick={() => onPageChange(page - 1)}
+        >
+          Previous
+        </Button>
+        <Button
+          variant="secondary"
+          className="px-3 py-1.5 text-sm"
+          disabled={disabled || !hasMore}
+          onClick={() => onPageChange(page + 1)}
+        >
+          Next
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export { ToastProvider, useToast, type ToastVariant } from "./Toast";
 export { OnboardingModal, shouldShowOnboarding } from "./OnboardingModal";

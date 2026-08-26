@@ -58,15 +58,15 @@ export async function invoicesRoutes(app: FastifyInstance) {
          FROM invoices i
          LEFT JOIN customers c ON c.id = i.customer_id
         WHERE i.tenant_id = $6
-          AND ($1::text IS NULL OR i.status = $1)
+          AND ($1::text IS NULL OR ($1 = 'overdue' AND i.status = 'open' AND i.due_date < CURRENT_DATE) OR i.status = $1)
           AND ($2::text IS NULL OR i.source = $2)
           AND ($3::text IS NULL OR c.name ILIKE '%' || $3 || '%' OR c.email ILIKE '%' || $3 || '%' OR i.external_id ILIKE '%' || $3 || '%')
-        ORDER BY i.due_date NULLS LAST, i.created_at DESC
-        LIMIT $4 OFFSET $5`,
+        ORDER BY i.due_date NULLS LAST, i.created_at DESC, i.id
+        LIMIT ($4 + 1) OFFSET $5`,
       [q.status ?? null, q.source ?? null, q.q ?? null, limit, offset, req.user.tenantId],
     );
 
-    return { invoices: rows.rows.map(toInvoice), limit, offset };
+    return { invoices: rows.rows.slice(0, limit).map(toInvoice), limit, offset, hasMore: rows.rows.length > limit };
   });
 
   app.get("/invoices/:id", async (req) => {

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Badge, Button, Card, EmptyState, Input, PageHeader, Spinner } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, PageHeader, Pagination, Spinner } from "@/components/ui";
 import { getInvoices, invoiceAction, type InvoiceDto } from "@/lib/api";
 import { daysUntil, formatDate, formatMoney } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -22,22 +22,18 @@ export function Invoices() {
   const [filter, setFilter] = useState<Filter>("all");
   const [source, setSource] = useState<string>("all");
   const [q, setQ] = useState("");
+  const [page, setPage] = useState(0);
+  const pageSize = 25;
 
-  const statusParam = filter === "overdue" ? "open" : filter === "all" ? undefined : filter;
+  const statusParam = filter === "all" ? undefined : filter;
   const sourceParam = source === "all" ? undefined : source;
 
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ["invoices", statusParam, sourceParam, q],
-    queryFn: () => getInvoices({ status: statusParam, source: sourceParam, q: q || undefined }),
+  const { data, isLoading, isFetching, refetch } = useQuery({
+    queryKey: ["invoices", statusParam, sourceParam, q, page],
+    queryFn: () => getInvoices({ status: statusParam, source: sourceParam, q: q || undefined, limit: pageSize, offset: page * pageSize }),
   });
 
-  const invoices = useMemo(() => {
-    const list = data?.invoices ?? [];
-    if (filter === "overdue") {
-      return list.filter((i) => i.status === "open" && (daysUntil(i.dueDate) ?? 0) < 0);
-    }
-    return list;
-  }, [data, filter]);
+  const invoices = useMemo(() => data?.invoices ?? [], [data]);
 
   async function runAction(inv: InvoiceDto, action: string) {
     try {
@@ -59,7 +55,10 @@ export function Invoices() {
           {FILTERS.map((f) => (
             <button
               key={f.value}
-              onClick={() => setFilter(f.value)}
+              onClick={() => {
+                setFilter(f.value);
+                setPage(0);
+              }}
               className={
                 "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
                 (filter === f.value ? "bg-primary text-white" : "text-muted hover:text-ink")
@@ -71,7 +70,10 @@ export function Invoices() {
         </div>
         <select
           value={source}
-          onChange={(e) => setSource(e.target.value)}
+          onChange={(e) => {
+            setSource(e.target.value);
+            setPage(0);
+          }}
           className="rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm"
         >
           <option value="all">All sources</option>
@@ -81,7 +83,10 @@ export function Invoices() {
         <Input
           placeholder="Search client…"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setPage(0);
+          }}
           className="max-w-xs"
         />
       </div>
@@ -188,6 +193,7 @@ export function Invoices() {
               })}
             </tbody>
           </table>
+          <Pagination page={page} hasMore={data?.hasMore ?? false} onPageChange={setPage} disabled={isFetching} />
         </Card>
       )}
     </div>
