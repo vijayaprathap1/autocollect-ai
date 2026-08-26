@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # AutoCollect AI
 
 Automated B2B invoice chasing for freelancers, agencies, and small businesses.
@@ -8,10 +9,6 @@ MVP scope (locked): **Stripe + CSV** sources · **email-only** · **approve-once
 
 ## Stack
 
-- **Web:** React 19 + Vite + React Router + TanStack Query + Tailwind
-- **API:** Node + Fastify (TypeScript)
-- **DB:** PostgreSQL (RLS for tenant isolation)
-- **Jobs:** in-process scheduler (Inngest adapter planned for production)
 
 ## Layout
 
@@ -44,8 +41,6 @@ npm run db:seed
 npm run dev
 ```
 
-- Web: http://localhost:5173
-- API: http://localhost:4000 (health: `/health`)
 
 ### Dev auth
 
@@ -67,3 +62,7 @@ auto-provisions a workspace. Production uses Clerk session JWTs.
 
 See `apps/api/.env.example`. External integrations (Stripe, Postmark, Anthropic,
 Clerk) are optional locally and degrade to dev fallbacks when keys are absent.
+=======
+# autocollect-ai
+AI-powered auto-collect project
+>>>>>>> origin/main
