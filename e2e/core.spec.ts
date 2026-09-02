@@ -46,7 +46,6 @@ test("seat limit blocks a member invite on the free plan", async ({ page }) => {
   await login(page, email);
   await page.getByRole("link", { name: "Settings" }).click();
   await page.getByRole("heading", { name: "Members" }).waitFor();
-
   await page.getByPlaceholder("teammate@company.com").fill("colleague@example.com");
   await page.getByRole("button", { name: "Invite" }).click();
   // Backend returns error for seat limit OR the invite succeeds (if seat count mismatch)
@@ -64,17 +63,13 @@ test("Replies page renders the reply inbox", async ({ page }) => {
 test("demo data seeds the workspace with invoices and replies", async ({ page }) => {
   const email = `pw-demo-${Date.now()}@example.com`;
   await login(page, email);
-
   await page.getByRole("button", { name: "Load demo data" }).click();
   await expect(page.getByText("Loading demo data…")).toBeVisible();
-
   await expect(page.getByText("Outstanding", { exact: true })).toBeVisible();
   await expect(page.getByText("Overdue", { exact: true })).toBeVisible();
-
   await page.getByRole("link", { name: "Customers" }).waitFor({ state: "visible" });
   await page.getByRole("link", { name: "Customers" }).click();
   await expect(page.getByRole("heading", { name: "Customers" })).toBeVisible();
-
   await page.getByRole("link", { name: "Replies" }).click();
   await expect(page.getByText("promise", { exact: false }).first()).toBeVisible();
 });
@@ -84,7 +79,7 @@ test("approving templates updates the rows and enables the workflow", async ({ p
   await page.request.post(`${API_URL}/templates/draft`);
   const skipOnboarding = page.getByRole("button", { name: "Skip onboarding" });
   if (await skipOnboarding.count()) await skipOnboarding.click();
-  await page.getByRole("link", { name: "Templates" }).click();
+  await page.getByRole("link", { name: "Templates", exact: true }).click();
   await expect(page.getByRole("button", { name: "Approve & enable" }).first()).toBeVisible();
 
   while (true) {

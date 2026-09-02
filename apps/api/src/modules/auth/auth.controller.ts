@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { randomBytes, createHash } from "node:crypto";
+import { z } from "zod";
 import { config } from "../../config.js";
 import { servicePool, query } from "../../lib/db.js";
 import {
@@ -10,6 +10,7 @@ import {
 import { badRequest, unauthorized, notFound } from "../../lib/errors.js";
 import { sendEmail, postmarkEnabled } from "../../lib/postmark.js";
 import { passwordResetEmail, emailVerificationEmail, teamInviteEmail } from "../../lib/email-templates.js";
+import { googleAuthRoutes } from "./google.controller.js";
 
 /**
  * All authentication endpoints. Public routes for unauthenticated users,
@@ -17,9 +18,64 @@ import { passwordResetEmail, emailVerificationEmail, teamInviteEmail } from "../
  */
 export async function authRoutes(app: FastifyInstance) {
   // ─── POST /auth/signup ────────────────────────────────────────────────
-  // Self-registration is disabled; accounts are provisioned by administrators.
+  // Create a pending user and a complete trial organization atomically.
   app.post("/auth/signup", { config: { public: true } }, async (req, reply) => {
-    throw badRequest("Self-registration is disabled. Ask your administrator for an invitation.", "REGISTRATION_DISABLED");
+    const input = z.object({
+      email: z.string().trim().toLowerCase().email().max(254),
+      password: z.string().min(8).max(128)
+        .regex(/[a-zA-Z]/, "must contain at least one letter")
+        .regex(/[0-9]/, "must contain at least one number"),
+      name: z.string().trim().min(1).max(100).optional(),
+      displayName: z.string().trim().min(1).max(100).optional(),
+      organizationName: z.string().trim().min(1).max(120).optional(),
+    }).parse(req.body ?? {});
+    const displayName = input.displayName ?? input.name ?? input.email.split("@")[0];
+    const organizationName = input.organizationName ?? displayName;
+    const passwordHash = await hashPassword(input.password);
+    const rawToken = generateToken();
+    const tokenHash = hashToken(rawToken);
+    const client = await servicePool.connect();
+    let created = false;
+
+    try {
+      await client.query("BEGIN");
+      const user = await client.query<{ id: string }>(
+        `INSERT INTO users (email, password_hash, display_name, status, email_verified_at)
+         VALUES ($1, $2, $3, 'pending', NULL)
+         ON CONFLICT (email) DO NOTHING
+         RETURNING id`,
+        [input.email, passwordHash, displayName],
+      );
+
+      if (user.rows[0]) {
+        created = true;
+        await provisionUserAndTenant(client, user.rows[0].id, organizationName);
+        await client.query(
+          `INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
+           VALUES ($1, $2, $3)`,
+          [user.rows[0].id, tokenHash, new Date(Date.now() + config.verifyTokenTtlHours * 3600_000).toISOString()],
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    if (created) {
+      const verifyUrl = `${config.webOrigin}/verify-email?token=${rawToken}`;
+      if (postmarkEnabled) {
+        const tmpl = emailVerificationEmail(verifyUrl, displayName);
+        await sendEmail({ to: input.email, subject: tmpl.subject, text: tmpl.text, html: tmpl.html, tag: "email-verification" })
+          .catch((err) => console.error("Failed to send verification email:", err));
+      } else {
+        console.log(`\nEmail verification link for ${input.email}:\n   ${verifyUrl}\n`);
+      }
+    }
+
+    return reply.send({ ok: true, message: "If the address can be registered, a verification link has been sent" });
   });
 
   // ─── POST /auth/login ─────────────────────────────────────────────────
@@ -35,10 +91,11 @@ export async function authRoutes(app: FastifyInstance) {
 
     const user = await findUserByEmail(servicePool, email);
     if (!user) throw badRequest("Invalid email or password", "INVALID_CREDENTIALS");
-    if (user.status !== "active") throw badRequest("Account is not active", "ACCOUNT_INACTIVE");
-
     const valid = await verifyPassword(user.password_hash, password);
     if (!valid) throw badRequest("Invalid email or password", "INVALID_CREDENTIALS");
+    if (user.status !== "active" || !user.email_verified_at) {
+      throw badRequest("Invalid email or password", "INVALID_CREDENTIALS");
+    }
     if (user.is_super_admin) throw badRequest("Use the super admin sign in", "ADMIN_LOGIN_REQUIRED");
 
     // Update last login
@@ -65,6 +122,7 @@ export async function authRoutes(app: FastifyInstance) {
     };
   });
 
+  // ─── POST /auth/admin/login ───────────────────────────────────────────
   // Platform administrators use a separate portal and session audience.
   app.post("/auth/admin/login", { config: { public: true } }, async (req, reply) => {
     const body = (req.body ?? {}) as { email?: string; password?: string };
@@ -187,7 +245,6 @@ export async function authRoutes(app: FastifyInstance) {
 
     const user = await findUserByEmail(servicePool, req.user.email);
     if (!user) throw unauthorized("User not found");
-
     const valid = await verifyPassword(user.password_hash, current);
     if (!valid) throw badRequest("Current password is incorrect", "INVALID_PASSWORD");
 
@@ -218,7 +275,7 @@ export async function authRoutes(app: FastifyInstance) {
     let user = await findUserByEmail(servicePool, email);
     if (!user) {
       const name = email.split("@")[0];
-      const passwordHash = await hashPassword("dev-password-auto");
+      const passwordHash = await hashToken("dev-password-auto");
       const created = await servicePool.query<{ id: string }>(
         `INSERT INTO users (email, password_hash, display_name, status, email_verified_at)
          VALUES ($1, $2, $3, 'active', now())
@@ -268,17 +325,36 @@ export async function authRoutes(app: FastifyInstance) {
     if (!rawToken) throw badRequest("Token is required");
 
     const tokenHash = hashToken(rawToken);
-    const row = await servicePool.query<{ user_id: string }>(
-      `SELECT user_id FROM email_verification_tokens
-       WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()`,
-      [tokenHash],
-    );
-
-    if (!row.rows[0]) throw badRequest("Invalid or expired verification token", "INVALID_TOKEN");
-
-    const userId = row.rows[0].user_id;
-    await servicePool.query(`UPDATE users SET email_verified_at = now(), updated_at = now() WHERE id = $1`, [userId]);
-    await servicePool.query(`UPDATE email_verification_tokens SET used_at = now() WHERE token_hash = $1`, [tokenHash]);
+    const client = await servicePool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query<{ id: string }>(
+        `WITH consumed AS (
+           UPDATE email_verification_tokens
+           SET used_at = now()
+           WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
+           RETURNING user_id
+         )
+         UPDATE users
+         SET email_verified_at = now(),
+             status = CASE WHEN status = 'pending' THEN 'active' ELSE status END,
+             updated_at = now()
+         FROM consumed
+         WHERE users.id = consumed.user_id
+         RETURNING users.id`,
+        [tokenHash],
+      );
+      if (!result.rows[0]) {
+        await client.query("ROLLBACK");
+        throw badRequest("Invalid or expired verification token", "INVALID_TOKEN");
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
 
     return { ok: true, message: "Email verified successfully" };
   });
@@ -303,4 +379,7 @@ export async function authRoutes(app: FastifyInstance) {
       role: org.role,
     };
   });
+
+  // ─── Google OAuth ───────────────────────────────────────────────────
+  void app.register(googleAuthRoutes);
 }

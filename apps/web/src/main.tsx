@@ -5,6 +5,7 @@ import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import "./index.css";
 import { Shell, AdminShell, PublicRoute } from "./App";
 import { Login } from "./pages/Login";
+import { SignUp } from "./pages/SignUp";
 import { AdminLogin } from "./pages/AdminLogin";
 import { ForgotPassword } from "./pages/ForgotPassword";
 import { ResetPassword } from "./pages/ResetPassword";
@@ -37,6 +38,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route element={<PublicRoute />}>
               <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<SignUp />} />
               <Route path="/admin/login" element={<AdminLogin />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />

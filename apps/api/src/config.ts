@@ -10,7 +10,7 @@ export const config = {
   port: Number(env("PORT", "4000")),
   databaseUrl: env(
     "DATABASE_URL",
-    "postgres://autocollect:autocollect_dev@localhost:5433/autocollect",
+    "postgres://autocollect:***@localhost:5433/autocollect",
   ),
   /**
    * Background/platform connections (webhooks, scheduler, sync). In production
@@ -62,6 +62,10 @@ export const config = {
   anthropicApiKey: env("ANTHROPIC_API_KEY"),
   anthropicModel: env("ANTHROPIC_MODEL", "claude-sonnet-4-5"),
 
+  // Google OAuth
+  googleClientId: env("GOOGLE_CLIENT_ID"),
+  googleClientSecret: env("GOOGLE_CLIENT_SECRET"),
+
   // Dunning
   dunningScanIntervalMs: Number(env("DUNNING_SCAN_INTERVAL_MS", "60000")),
 
@@ -88,6 +92,14 @@ export function validateProductionConfig(): void {
   if (!config.inboundWebhookToken) missing.push("POSTMARK_WEBHOOK_TOKEN");
   if (!config.postmarkServerToken) missing.push("POSTMARK_SERVER_TOKEN");
   if (!config.cronSecret) missing.push("CRON_SECRET");
+  // Stripe keys (if stripeSecretKey is set, we expect Connect and webhook secrets)
+  if (config.stripeSecretKey) {
+    if (!config.stripeConnectClientId) missing.push("STRIPE_CONNECT_CLIENT_ID");
+    if (!config.stripeWebhookSecret) missing.push("STRIPE_WEBHOOK_SECRET");
+  }
+  // Google OAuth keys
+  if (!config.googleClientId) missing.push("GOOGLE_CLIENT_ID");
+  if (!config.googleClientSecret) missing.push("GOOGLE_CLIENT_SECRET");
   if (config.superAdminPassword === "admin123") missing.push("SUPER_ADMIN_PASSWORD");
 
   if (missing.length > 0) {

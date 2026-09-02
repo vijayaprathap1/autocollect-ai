@@ -94,12 +94,12 @@ export function extractCookieToken(req: FastifyRequest): string | undefined {
 export async function findUserByEmail(
   client: { query: <T>(sql: string, params?: unknown[]) => Promise<{ rows: T[] }> },
   email: string,
-): Promise<{ id: string; email: string; password_hash: string; display_name: string | null; status: string; is_super_admin: boolean } | null> {
+): Promise<{ id: string; email: string; password_hash: string; display_name: string | null; status: string; email_verified_at: string | null; is_super_admin: boolean } | null> {
   const rows = await client.query<{
     id: string; email: string; password_hash: string; display_name: string | null;
-    status: string; is_super_admin: boolean;
+    status: string; email_verified_at: string | null; is_super_admin: boolean;
   }>(
-    `SELECT id, email, password_hash, display_name, status, is_super_admin
+    `SELECT id, email, password_hash, display_name, status, email_verified_at, is_super_admin
      FROM users WHERE email = $1`,
     [email.toLowerCase().trim()],
   );
@@ -161,8 +161,15 @@ export async function provisionUserAndTenant(
 
   // Create starter subscription
   await client.query(
-    `INSERT INTO subscriptions (tenant_id, plan, status, credits_per_month)
-     VALUES ($1, 'free', 'active', 50)`,
+    `INSERT INTO subscriptions
+       (tenant_id, plan, status, credits_per_month, trial_started_at, trial_ends_at)
+     VALUES ($1, 'free', 'trialing', 50, now(), now() + interval '14 days')`,
+    [tenantId],
+  );
+
+  await client.query(
+    `INSERT INTO credit_transactions (tenant_id, delta, reason, actor, created_at)
+     VALUES ($1, 50, 'trial_grant', 'system', now())`,
     [tenantId],
   );
 

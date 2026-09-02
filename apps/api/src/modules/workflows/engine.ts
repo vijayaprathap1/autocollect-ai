@@ -80,8 +80,7 @@ async function loadInvoice(tenantId: string, invoiceId: string): Promise<Invoice
 
 async function completeSequence(inv: InvoiceForEngine): Promise<void> {
   await servicePool.query(
-    `UPDATE invoices SET next_step_index = 9999, next_step_due_at = NULL, updated_at = now()
-     WHERE id = $1`,
+    `UPDATE invoices SET next_step_index = 9999, next_step_due_at = NULL, updated_at = now()\n     WHERE id = $1`,
     [inv.id],
   );
 }
@@ -154,9 +153,11 @@ async function processOne(
   const recipient = channel === "sms" ? inv.customer_phone : inv.customer_email;
   if (!recipient) return "noop";
 
+  // We will now handle the reservation and sending in a transaction.
   const claimClient = await servicePool.connect();
   try {
     await claimClient.query("BEGIN");
+    // Deduct credit for this send attempt
     const creditAvailable = await deductCredit(claimClient, inv.tenant_id, "dunning_send", inv.id);
     if (!creditAvailable) {
       await claimClient.query("ROLLBACK");
@@ -177,101 +178,108 @@ async function processOne(
       return "noop";
     }
 
-    const claimed = await claimClient.query(
-      `INSERT INTO messages (tenant_id, invoice_id, step_index, channel, status)
-       VALUES ($1, $2, $3, $4, 'sending')
-       ON CONFLICT (tenant_id, invoice_id, step_index) WHERE step_index IS NOT NULL DO NOTHING
-       RETURNING id`,
-      [inv.tenant_id, inv.id, inv.next_step_index, channel],
+    // Try to reserve the message for sending
+    const reservationResult = await claimClient.query(
+      `
+      WITH upsert AS (
+        UPDATE messages
+        SET reserved_until = now() + interval '5 minutes'
+        WHERE tenant_id = $1 AND invoice_id = $2 AND step_index = $3
+          AND status = 'sending'
+          AND (reserved_until IS NULL OR reserved_until < now())
+        RETURNING *
+      )
+      INSERT INTO messages (tenant_id, invoice_id, step_index, status, reserved_until)
+      SELECT $1, $2, $3, 'sending', now() + interval '5 minutes'
+      WHERE NOT EXISTS (SELECT 1 FROM upsert)
+      RETURNING *
+      `,
+      [inv.tenant_id, inv.id, inv.next_step_index]
     );
-    if (claimed.rows.length === 0) {
+
+    if (reservationResult.rowCount === 0) {
+      // Another process has reserved this message
       await claimClient.query("ROLLBACK");
       return "noop";
     }
-    await claimClient.query("COMMIT");
-  } catch (err) {
-    await claimClient.query("ROLLBACK").catch(() => {});
-    throw err;
-  } finally {
-    claimClient.release();
-  }
 
-  let providerMsgId: string;
-  try {
-    if (channel === "sms") {
-      const body = rendered.body.replace(/\s+/g, " ").trim().slice(0, 160);
-      providerMsgId = (await sendSms({ to: recipient, body })).providerMsgId;
-    } else {
-      providerMsgId = (
-        await sendEmail({
-          to: recipient,
-          subject: rendered.subject,
-          text: rendered.body,
-          tag: `invoice-${inv.external_id ?? inv.id}`,
-        })
-      ).providerMsgId;
-    }
-  } catch (err) {
-    const settleClient = await servicePool.connect();
+    // We have the reservation, proceed to send
+    let providerMsgId: string;
     try {
-      await settleClient.query("BEGIN");
-      await settleClient.query(
-        `UPDATE messages SET status = 'failed'
-         WHERE tenant_id = $1 AND invoice_id = $2 AND step_index = $3 AND status = 'sending'`,
-        [inv.tenant_id, inv.id, inv.next_step_index],
+      if (channel === "sms") {
+        const body = rendered.body.replace(/\s+/g, " ").trim().slice(0, 160);
+        providerMsgId = (await sendSms({ to: recipient, body })).providerMsgId;
+      } else {
+        providerMsgId = (
+          await sendEmail({
+            to: recipient,
+            subject: rendered.subject,
+            text: rendered.body,
+            tag: `invoice-${inv.external_id ?? inv.id}`,
+          })
+        ).providerMsgId;
+      }
+    } catch (err) {
+      // On failure, update message status and refund credit
+      await claimClient.query(
+        `UPDATE messages SET status = 'failed', reserved_until = NULL WHERE tenant_id = $1 AND invoice_id = $2 AND step_index = $3`,
+        [inv.tenant_id, inv.id, inv.next_step_index]
       );
-      await settleClient.query(
+      await claimClient.query(
         `UPDATE credit_wallets SET balance = balance + 1, updated_at = now() WHERE tenant_id = $1`,
         [inv.tenant_id],
       );
-      await settleClient.query(
+      await claimClient.query(
         `INSERT INTO credit_transactions (tenant_id, delta, reason, reference_id, actor, created_at)
          VALUES ($1, 1, 'dunning_send_failed', $2, 'engine', now())`,
         [inv.tenant_id, inv.id],
       );
-      await settleClient.query("COMMIT");
-    } catch {
-      await settleClient.query("ROLLBACK").catch(() => {});
-    } finally {
-      settleClient.release();
+      await claimClient.query("COMMIT");
+      throw err;
     }
-    throw err;
-  }
 
-  await servicePool.query(
-    `UPDATE messages SET provider_msg_id = $1, status = 'sent', sent_at = now()
-     WHERE tenant_id = $2 AND invoice_id = $3 AND step_index = $4 AND status = 'sending'`,
-    [providerMsgId, inv.tenant_id, inv.id, inv.next_step_index],
-  );
-
-  await servicePool.query(
-    `INSERT INTO audit_log (tenant_id, actor, action, detail)
-     VALUES ($1, 'system', 'dunning_sent', $2::jsonb)`,
-    [
-      inv.tenant_id,
-      JSON.stringify({
-        invoice_id: inv.id,
-        step_index: inv.next_step_index,
-        channel,
-        provider_msg_id: providerMsgId,
-        manual: force,
-      }),
-    ],
-  );
-
-  const nextIndex = inv.next_step_index + 1;
-  const nextStep = steps[nextIndex];
-  if (!nextStep) {
-    await completeSequence(inv);
-  } else {
-    const nextScheduled = scheduledFor(inv.due_date, nextStep.delayDays, now);
-    await servicePool.query(
-      `UPDATE invoices SET next_step_index = $2, next_step_due_at = $3, updated_at = now() WHERE id = $1`,
-      [inv.id, nextIndex, nextScheduled.toISOString()],
+    // On success, update message to sent and clear reservation
+    await claimClient.query(
+      `UPDATE messages SET provider_msg_id = $1, status = 'sent', sent_at = now(), reserved_until = NULL WHERE tenant_id = $2 AND invoice_id = $3 AND step_index = $4`,
+      [providerMsgId, inv.tenant_id, inv.id, inv.next_step_index]
     );
-  }
 
-  return "sent";
+    await claimClient.query(
+      `INSERT INTO audit_log (tenant_id, actor, action, detail)
+       VALUES ($1, 'system', 'dunning_sent', $2::jsonb)`,
+      [
+        inv.tenant_id,
+        JSON.stringify({
+          invoice_id: inv.id,
+          step_index: inv.next_step_index,
+          channel,
+          provider_msg_id: providerMsgId,
+          manual: force,
+        }),
+      ],
+    );
+
+    // Advance the sequence
+    const nextIndex = inv.next_step_index + 1;
+    const nextStep = steps[nextIndex];
+    if (!nextStep) {
+      await completeSequence(inv);
+    } else {
+      const nextScheduled = scheduledFor(inv.due_date, nextStep.delayDays, now);
+      await servicePool.query(
+        `UPDATE invoices SET next_step_index = $2, next_step_due_at = $3, updated_at = now() WHERE id = $1`,
+        [inv.id, nextIndex, nextScheduled.toISOString()],
+      );
+    }
+
+    await claimClient.query("COMMIT");
+    return "sent";
+  } catch (err) {
+    await claimClient.query("ROLLBACK");
+    throw err;
+  } finally {
+    claimClient.release();
+  }
 }
 
 /**
@@ -285,32 +293,32 @@ export async function runDunning(now = new Date()): Promise<number> {
   if (!acquired) return 0;
 
   try {
-  const candidates = await servicePool.query<InvoiceForEngine>(
-    `${INVOICE_SELECT} WHERE i.status = 'open' AND i.next_step_index < 9999`,
-  );
+    const candidates = await servicePool.query<InvoiceForEngine>(
+      `${INVOICE_SELECT} WHERE i.status = 'open' AND i.next_step_index < 9999`
+    );
 
-  let sent = 0;
+    let sent = 0;
 
-  for (const inv of candidates.rows) {
-    try {
-      const result = await processOne(inv, now, false);
-      if (result === "sent") sent += 1;
-    } catch (err) {
-      await servicePool
-        .query(
-          `INSERT INTO audit_log (tenant_id, actor, action, detail)
-           VALUES ($1, 'system', 'dunning_error', $2::jsonb)`,
-          [
-            inv.tenant_id,
-            JSON.stringify({
-              invoice_id: inv.id,
-              error: err instanceof Error ? err.message : String(err),
-            }),
-          ],
-        )
-        .catch(() => {});
+    for (const inv of candidates.rows) {
+      try {
+        const result = await processOne(inv, now, false);
+        if (result === "sent") sent += 1;
+      } catch (err) {
+        await servicePool
+          .query(
+            `INSERT INTO audit_log (tenant_id, actor, action, detail)
+             VALUES ($1, 'system', 'dunning_error', $2::jsonb)`,
+            [
+              inv.tenant_id,
+              JSON.stringify({
+                invoice_id: inv.id,
+                error: err instanceof Error ? err.message : String(err),
+              }),
+            ],
+          )
+          .catch(() => {});
+      }
     }
-  }
 
     return sent;
   } finally {
@@ -318,7 +326,9 @@ export async function runDunning(now = new Date()): Promise<number> {
   }
 }
 
-/** Manual "send now" for a single invoice (admin-triggered). */
+/**
+ * Manual "send now" for a single invoice (admin-triggered).
+ */
 export async function sendNowForInvoice(
   tenantId: string,
   invoiceId: string,

@@ -1,0 +1,515 @@
+'"5433"' is not recognized as an internal or external command,
+operable program or batch file.
+2026-08-27 18:13:48.169 IST [5040] LOG:  starting PostgreSQL 17.4 on x86_64-windows, compiled by msvc-19.42.34436, 64-bit
+2026-08-27 18:13:48.181 IST [5040] LOG:  listening on IPv6 address "::1", port 5433
+2026-08-27 18:13:48.182 IST [5040] LOG:  listening on IPv4 address "127.0.0.1", port 5433
+2026-08-27 18:13:48.308 IST [22960] LOG:  database system was shut down at 2026-08-27 18:13:15 IST
+2026-08-27 18:13:48.358 IST [5040] LOG:  database system is ready to accept connections
+2026-08-27 18:18:48.280 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 18:18:52.202 IST [18384] LOG:  checkpoint complete: wrote 38 buffers (0.2%); 0 WAL file(s) added, 0 removed, 0 recycled; write=3.783 s, sync=0.062 s, total=3.922 s; sync files=11, longest=0.049 s, average=0.006 s; distance=197 kB, estimate=197 kB; lsn=0/15A3A20, redo lsn=0/15A39C8
+2026-08-27 18:21:13.184 IST [15640] FATAL:  database "autocollect" does not exist
+2026-08-27 18:22:29.990 IST [11280] WARNING:  there is no transaction in progress
+2026-08-27 18:22:30.010 IST [11280] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-27 18:22:30.010 IST [32556] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-27 18:22:44.517 IST [34556] WARNING:  there is no transaction in progress
+2026-08-27 18:22:44.537 IST [31592] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-27 18:22:44.537 IST [34556] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-27 18:23:48.223 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 18:25:19.328 IST [14060] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-27 18:25:19.328 IST [20120] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-27 18:25:19.328 IST [28964] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-27 18:25:44.248 IST [18384] LOG:  checkpoint complete: wrote 1058 buffers (6.5%); 0 WAL file(s) added, 0 removed, 0 recycled; write=115.649 s, sync=0.360 s, total=116.026 s; sync files=429, longest=0.047 s, average=0.001 s; distance=5462 kB, estimate=5462 kB; lsn=0/1AF9C70, redo lsn=0/1AF9360
+2026-08-27 18:26:28.184 IST [13696] WARNING:  there is no transaction in progress
+2026-08-27 18:26:28.224 IST [13696] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-27 18:26:28.225 IST [21552] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-27 18:28:48.351 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 18:28:49.813 IST [18384] LOG:  checkpoint complete: wrote 13 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.327 s, sync=0.055 s, total=1.463 s; sync files=11, longest=0.048 s, average=0.005 s; distance=13 kB, estimate=4917 kB; lsn=0/1AFCAC8, redo lsn=0/1AFCA70
+2026-08-27 18:33:48.817 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 18:33:58.518 IST [18384] LOG:  checkpoint complete: wrote 89 buffers (0.5%); 0 WAL file(s) added, 0 removed, 0 recycled; write=9.592 s, sync=0.052 s, total=9.702 s; sync files=60, longest=0.004 s, average=0.001 s; distance=141 kB, estimate=4439 kB; lsn=0/1B201B0, redo lsn=0/1B20120
+2026-08-27 18:38:48.533 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 18:38:49.388 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.783 s, sync=0.059 s, total=0.855 s; sync files=8, longest=0.048 s, average=0.008 s; distance=10 kB, estimate=3996 kB; lsn=0/1B22AF8, redo lsn=0/1B22AA0
+2026-08-27 18:43:48.392 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 18:43:49.637 IST [18384] LOG:  checkpoint complete: wrote 12 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.208 s, sync=0.017 s, total=1.246 s; sync files=11, longest=0.004 s, average=0.002 s; distance=31 kB, estimate=3600 kB; lsn=0/1B2A8A8, redo lsn=0/1B2A850
+2026-08-27 18:48:48.645 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 18:48:49.562 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.792 s, sync=0.060 s, total=0.917 s; sync files=8, longest=0.048 s, average=0.008 s; distance=14 kB, estimate=3241 kB; lsn=0/1B2E2C0, redo lsn=0/1B2E268
+2026-08-27 18:53:48.570 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 18:53:50.029 IST [18384] LOG:  checkpoint complete: wrote 13 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.330 s, sync=0.061 s, total=1.459 s; sync files=11, longest=0.048 s, average=0.006 s; distance=33 kB, estimate=2920 kB; lsn=0/1B36778, redo lsn=0/1B36720
+2026-08-27 18:58:48.039 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 18:58:48.919 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.800 s, sync=0.059 s, total=0.880 s; sync files=8, longest=0.048 s, average=0.008 s; distance=11 kB, estimate=2630 kB; lsn=0/1B39540, redo lsn=0/1B394E8
+2026-08-27 19:03:48.929 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 19:03:50.227 IST [18384] LOG:  checkpoint complete: wrote 12 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.206 s, sync=0.011 s, total=1.299 s; sync files=11, longest=0.002 s, average=0.001 s; distance=32 kB, estimate=2370 kB; lsn=0/1B41878, redo lsn=0/1B41820
+2026-08-27 19:08:48.234 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 19:08:49.086 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.787 s, sync=0.053 s, total=0.853 s; sync files=8, longest=0.048 s, average=0.007 s; distance=15 kB, estimate=2134 kB; lsn=0/1B45748, redo lsn=0/1B456F0
+2026-08-27 19:13:48.096 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 19:13:48.894 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.766 s, sync=0.022 s, total=0.799 s; sync files=8, longest=0.013 s, average=0.003 s; distance=17 kB, estimate=1923 kB; lsn=0/1B49E50, redo lsn=0/1B49DF8
+2026-08-27 19:18:48.904 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 19:18:50.317 IST [18384] LOG:  checkpoint complete: wrote 13 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.289 s, sync=0.062 s, total=1.414 s; sync files=13, longest=0.047 s, average=0.005 s; distance=48 kB, estimate=1735 kB; lsn=0/1B57BE8, redo lsn=0/1B55FF0
+2026-08-27 19:23:48.323 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 19:23:49.316 IST [18384] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.869 s, sync=0.061 s, total=0.994 s; sync files=9, longest=0.048 s, average=0.007 s; distance=14 kB, estimate=1563 kB; lsn=0/1B59A98, redo lsn=0/1B59A08
+2026-08-27 19:28:48.332 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 19:28:49.240 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.784 s, sync=0.053 s, total=0.912 s; sync files=8, longest=0.047 s, average=0.007 s; distance=9 kB, estimate=1408 kB; lsn=0/1B5C188, redo lsn=0/1B5C130
+2026-08-27 19:33:48.250 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 19:33:49.377 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.011 s, sync=0.055 s, total=1.127 s; sync files=10, longest=0.047 s, average=0.006 s; distance=23 kB, estimate=1269 kB; lsn=0/1B62180, redo lsn=0/1B62128
+2026-08-27 19:38:48.393 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 19:38:53.039 IST [18384] LOG:  checkpoint complete: wrote 43 buffers (0.3%); 0 WAL file(s) added, 0 removed, 0 recycled; write=4.607 s, sync=0.020 s, total=4.646 s; sync files=13, longest=0.013 s, average=0.002 s; distance=132 kB, estimate=1156 kB; lsn=0/1B83530, redo lsn=0/1B834D8
+2026-08-27 19:43:48.043 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 19:43:49.055 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.981 s, sync=0.010 s, total=1.013 s; sync files=10, longest=0.003 s, average=0.001 s; distance=31 kB, estimate=1043 kB; lsn=0/1B8B410, redo lsn=0/1B8B3B8
+2026-08-27 19:48:48.065 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 19:48:48.876 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.771 s, sync=0.018 s, total=0.812 s; sync files=8, longest=0.013 s, average=0.003 s; distance=10 kB, estimate=940 kB; lsn=0/1B8DF20, redo lsn=0/1B8DEC8
+2026-08-27 19:53:48.880 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 19:53:50.036 IST [18384] LOG:  checkpoint complete: wrote 11 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.111 s, sync=0.017 s, total=1.156 s; sync files=11, longest=0.004 s, average=0.002 s; distance=22 kB, estimate=848 kB; lsn=0/1B93958, redo lsn=0/1B93900
+2026-08-27 19:58:48.039 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 19:58:48.849 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.771 s, sync=0.018 s, total=0.810 s; sync files=8, longest=0.012 s, average=0.003 s; distance=14 kB, estimate=765 kB; lsn=0/1B97530, redo lsn=0/1B974D8
+2026-08-27 20:03:48.851 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 20:03:49.636 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.758 s, sync=0.006 s, total=0.785 s; sync files=8, longest=0.002 s, average=0.001 s; distance=17 kB, estimate=690 kB; lsn=0/1B9B998, redo lsn=0/1B9B908
+2026-08-27 20:08:48.638 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 20:08:49.555 IST [18384] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.884 s, sync=0.007 s, total=0.918 s; sync files=9, longest=0.002 s, average=0.001 s; distance=23 kB, estimate=623 kB; lsn=0/1BA17B8, redo lsn=0/1BA1760
+2026-08-27 20:13:48.570 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 20:13:49.848 IST [18384] LOG:  checkpoint complete: wrote 12 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.230 s, sync=0.022 s, total=1.279 s; sync files=12, longest=0.013 s, average=0.002 s; distance=31 kB, estimate=564 kB; lsn=0/1BA96B8, redo lsn=0/1BA9660
+2026-08-27 20:18:48.863 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 20:18:49.668 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.766 s, sync=0.017 s, total=0.806 s; sync files=8, longest=0.012 s, average=0.003 s; distance=9 kB, estimate=508 kB; lsn=0/1BABAF0, redo lsn=0/1BABA98
+2026-08-27 20:23:48.682 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 20:23:49.493 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.768 s, sync=0.018 s, total=0.812 s; sync files=8, longest=0.013 s, average=0.003 s; distance=11 kB, estimate=459 kB; lsn=0/1BAE778, redo lsn=0/1BAE720
+2026-08-27 20:28:48.506 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 20:28:49.515 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.982 s, sync=0.016 s, total=1.009 s; sync files=10, longest=0.011 s, average=0.002 s; distance=25 kB, estimate=415 kB; lsn=0/1BB4F30, redo lsn=0/1BB4ED8
+2026-08-27 20:33:48.523 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 20:33:49.354 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.783 s, sync=0.022 s, total=0.832 s; sync files=8, longest=0.013 s, average=0.003 s; distance=15 kB, estimate=375 kB; lsn=0/1BB8CA8, redo lsn=0/1BB8C50
+2026-08-27 20:38:48.363 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 20:38:49.371 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.970 s, sync=0.013 s, total=1.009 s; sync files=10, longest=0.004 s, average=0.002 s; distance=33 kB, estimate=341 kB; lsn=0/1BC1110, redo lsn=0/1BC10B8
+2026-08-27 20:43:48.372 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 20:43:49.392 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.991 s, sync=0.019 s, total=1.021 s; sync files=10, longest=0.013 s, average=0.002 s; distance=26 kB, estimate=310 kB; lsn=0/1BC7BD0, redo lsn=0/1BC7B78
+2026-08-27 20:48:48.459 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 20:48:49.265 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.771 s, sync=0.010 s, total=0.807 s; sync files=8, longest=0.003 s, average=0.002 s; distance=14 kB, estimate=280 kB; lsn=0/1BCB4D0, redo lsn=0/1BCB478
+2026-08-27 20:53:48.335 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 20:53:49.148 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.776 s, sync=0.017 s, total=0.813 s; sync files=8, longest=0.012 s, average=0.003 s; distance=16 kB, estimate=254 kB; lsn=0/1BCF6B0, redo lsn=0/1BCF620
+2026-08-27 20:58:48.214 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 20:58:49.114 IST [18384] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.863 s, sync=0.018 s, total=0.900 s; sync files=9, longest=0.012 s, average=0.002 s; distance=22 kB, estimate=230 kB; lsn=0/1BD5240, redo lsn=0/1BD51E8
+2026-08-27 21:03:48.168 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 21:03:49.402 IST [18384] LOG:  checkpoint complete: wrote 12 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.203 s, sync=0.019 s, total=1.234 s; sync files=12, longest=0.012 s, average=0.002 s; distance=45 kB, estimate=212 kB; lsn=0/1BE0970, redo lsn=0/1BE0918
+2026-08-27 21:08:48.448 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 21:08:49.262 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.750 s, sync=0.007 s, total=0.814 s; sync files=8, longest=0.002 s, average=0.001 s; distance=8 kB, estimate=192 kB; lsn=0/1BE2AB0, redo lsn=0/1BE2A58
+2026-08-27 21:13:48.312 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 21:13:49.213 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.780 s, sync=0.054 s, total=0.902 s; sync files=8, longest=0.047 s, average=0.007 s; distance=10 kB, estimate=173 kB; lsn=0/1BE5448, redo lsn=0/1BE53F0
+2026-08-27 21:18:48.257 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 21:18:49.378 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.988 s, sync=0.054 s, total=1.122 s; sync files=10, longest=0.047 s, average=0.006 s; distance=25 kB, estimate=159 kB; lsn=0/1BEB9B0, redo lsn=0/1BEB958
+2026-08-27 21:23:48.415 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 21:23:49.275 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.792 s, sync=0.009 s, total=0.861 s; sync files=8, longest=0.003 s, average=0.001 s; distance=14 kB, estimate=144 kB; lsn=0/1BEF418, redo lsn=0/1BEF3C0
+2026-08-27 21:28:48.309 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 21:28:49.399 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.975 s, sync=0.055 s, total=1.091 s; sync files=10, longest=0.047 s, average=0.006 s; distance=32 kB, estimate=133 kB; lsn=0/1BF75C0, redo lsn=0/1BF7568
+2026-08-27 21:33:48.442 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 21:33:49.563 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.996 s, sync=0.060 s, total=1.121 s; sync files=10, longest=0.048 s, average=0.006 s; distance=25 kB, estimate=122 kB; lsn=0/1BFDDB8, redo lsn=0/1BFDD60
+2026-08-27 21:38:48.603 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 21:38:49.624 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 1 WAL file(s) added, 0 removed, 0 recycled; write=0.788 s, sync=0.058 s, total=1.022 s; sync files=8, longest=0.048 s, average=0.008 s; distance=13 kB, estimate=111 kB; lsn=0/1C013F8, redo lsn=0/1C013A0
+2026-08-27 21:43:48.657 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 21:43:49.516 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.785 s, sync=0.053 s, total=0.859 s; sync files=8, longest=0.048 s, average=0.007 s; distance=15 kB, estimate=102 kB; lsn=0/1C05300, redo lsn=0/1C05270
+2026-08-27 21:48:48.549 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 21:48:49.435 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.765 s, sync=0.059 s, total=0.887 s; sync files=8, longest=0.048 s, average=0.008 s; distance=17 kB, estimate=93 kB; lsn=0/1C09A30, redo lsn=0/1C099D8
+2026-08-27 21:53:48.463 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 21:53:49.835 IST [18384] LOG:  checkpoint complete: wrote 14 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.303 s, sync=0.050 s, total=1.373 s; sync files=13, longest=0.039 s, average=0.004 s; distance=49 kB, estimate=89 kB; lsn=0/1C15E80, redo lsn=0/1C15E28
+2026-08-27 21:58:48.859 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 21:58:49.825 IST [18384] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.870 s, sync=0.012 s, total=0.968 s; sync files=9, longest=0.004 s, average=0.002 s; distance=14 kB, estimate=81 kB; lsn=0/1C19900, redo lsn=0/1C198A8
+2026-08-27 22:03:48.854 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 22:03:49.716 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.788 s, sync=0.008 s, total=0.863 s; sync files=8, longest=0.003 s, average=0.001 s; distance=9 kB, estimate=74 kB; lsn=0/1C1BFD8, redo lsn=0/1C1BF80
+2026-08-27 22:08:48.737 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 22:08:49.830 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.013 s, sync=0.019 s, total=1.093 s; sync files=10, longest=0.006 s, average=0.002 s; distance=24 kB, estimate=69 kB; lsn=0/1C22248, redo lsn=0/1C221F0
+2026-08-27 22:13:48.858 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 22:13:49.720 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.778 s, sync=0.013 s, total=0.863 s; sync files=8, longest=0.004 s, average=0.002 s; distance=13 kB, estimate=63 kB; lsn=0/1C259D8, redo lsn=0/1C25980
+2026-08-27 22:18:48.741 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 22:18:49.569 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.784 s, sync=0.025 s, total=0.829 s; sync files=8, longest=0.016 s, average=0.004 s; distance=15 kB, estimate=59 kB; lsn=0/1C29A00, redo lsn=0/1C29970
+2026-08-27 22:23:48.594 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 22:23:49.824 IST [18384] LOG:  checkpoint complete: wrote 11 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.099 s, sync=0.060 s, total=1.231 s; sync files=11, longest=0.048 s, average=0.006 s; distance=34 kB, estimate=56 kB; lsn=0/1C32300, redo lsn=0/1C322A8
+2026-08-27 22:28:48.844 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 22:28:49.719 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.755 s, sync=0.058 s, total=0.875 s; sync files=8, longest=0.048 s, average=0.008 s; distance=12 kB, estimate=52 kB; lsn=0/1C35650, redo lsn=0/1C355F8
+2026-08-27 22:33:48.742 IST [18384] LOG:  checkpoint starting: time
+2026-08-27 22:33:49.567 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.785 s, sync=0.010 s, total=0.826 s; sync files=8, longest=0.004 s, average=0.002 s; distance=14 kB, estimate=48 kB; lsn=0/1C39228, redo lsn=0/1C391D0
+2026-08-28 08:36:06.232 IST [30944] WARNING:  autovacuum worker took too long to start; canceled
+2026-08-28 08:36:10.727 IST [20180] WARNING:  autovacuum worker started without a worker entry
+2026-08-28 08:39:02.530 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 08:39:03.327 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.778 s, sync=0.007 s, total=0.798 s; sync files=8, longest=0.003 s, average=0.001 s; distance=17 kB, estimate=45 kB; lsn=0/1C3D6F0, redo lsn=0/1C3D698
+2026-08-28 08:44:02.340 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 08:44:03.618 IST [18384] LOG:  checkpoint complete: wrote 12 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.238 s, sync=0.019 s, total=1.279 s; sync files=12, longest=0.012 s, average=0.002 s; distance=39 kB, estimate=44 kB; lsn=0/1C47490, redo lsn=0/1C47438
+2026-08-28 08:49:02.619 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 08:49:03.664 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.014 s, sync=0.008 s, total=1.045 s; sync files=10, longest=0.002 s, average=0.001 s; distance=30 kB, estimate=43 kB; lsn=0/1C4ED90, redo lsn=0/1C4ED38
+2026-08-28 08:54:02.687 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 08:54:03.540 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.779 s, sync=0.020 s, total=0.853 s; sync files=8, longest=0.013 s, average=0.003 s; distance=9 kB, estimate=39 kB; lsn=0/1C51190, redo lsn=0/1C51138
+2026-08-28 08:59:02.548 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 08:59:03.584 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.993 s, sync=0.021 s, total=1.037 s; sync files=10, longest=0.014 s, average=0.002 s; distance=23 kB, estimate=38 kB; lsn=0/1C57160, redo lsn=0/1C57108
+2026-08-28 09:04:02.585 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 09:04:03.420 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.780 s, sync=0.023 s, total=0.836 s; sync files=8, longest=0.013 s, average=0.003 s; distance=13 kB, estimate=35 kB; lsn=0/1C5A630, redo lsn=0/1C5A5A0
+2026-08-28 09:09:02.427 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 09:09:03.256 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.793 s, sync=0.017 s, total=0.830 s; sync files=8, longest=0.012 s, average=0.003 s; distance=15 kB, estimate=33 kB; lsn=0/1C5E360, redo lsn=0/1C5E308
+2026-08-28 09:14:02.267 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 09:14:03.301 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.004 s, sync=0.008 s, total=1.035 s; sync files=10, longest=0.002 s, average=0.001 s; distance=33 kB, estimate=33 kB; lsn=0/1C66790, redo lsn=0/1C66738
+2026-08-28 09:19:02.310 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 09:19:03.342 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.991 s, sync=0.008 s, total=1.033 s; sync files=10, longest=0.002 s, average=0.001 s; distance=26 kB, estimate=33 kB; lsn=0/1C6D250, redo lsn=0/1C6D1F8
+2026-08-28 09:24:02.355 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 09:24:03.187 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.772 s, sync=0.023 s, total=0.832 s; sync files=8, longest=0.012 s, average=0.003 s; distance=14 kB, estimate=31 kB; lsn=0/1C70B50, redo lsn=0/1C70AF8
+2026-08-28 09:29:02.209 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 09:29:02.990 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.766 s, sync=0.005 s, total=0.782 s; sync files=8, longest=0.002 s, average=0.001 s; distance=16 kB, estimate=29 kB; lsn=0/1C74C78, redo lsn=0/1C74C20
+2026-08-28 09:34:02.994 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 09:34:04.241 IST [18384] LOG:  checkpoint complete: wrote 12 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.232 s, sync=0.007 s, total=1.247 s; sync files=12, longest=0.002 s, average=0.001 s; distance=38 kB, estimate=38 kB; lsn=0/1C7E708, redo lsn=0/1C7E6B0
+2026-08-28 09:39:02.250 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 09:39:03.275 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.994 s, sync=0.009 s, total=1.026 s; sync files=10, longest=0.002 s, average=0.001 s; distance=29 kB, estimate=37 kB; lsn=0/1C85BF8, redo lsn=0/1C85B68
+2026-08-28 09:44:02.293 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 09:44:03.241 IST [18384] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.900 s, sync=0.014 s, total=0.949 s; sync files=9, longest=0.004 s, average=0.002 s; distance=15 kB, estimate=35 kB; lsn=0/1C89910, redo lsn=0/1C898B8
+2026-08-28 09:49:02.257 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 09:49:03.283 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.990 s, sync=0.006 s, total=1.027 s; sync files=10, longest=0.001 s, average=0.001 s; distance=23 kB, estimate=34 kB; lsn=0/1C8F5D0, redo lsn=0/1C8F578
+2026-08-28 09:54:02.296 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 09:54:03.098 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.773 s, sync=0.006 s, total=0.803 s; sync files=8, longest=0.002 s, average=0.001 s; distance=12 kB, estimate=32 kB; lsn=0/1C927E0, redo lsn=0/1C92750
+2026-08-28 09:54:24.700 IST [12388] ERROR:  column "updated_at" of relation "tenants" does not exist at character 33
+2026-08-28 09:54:24.700 IST [12388] STATEMENT:  UPDATE tenants SET status = $2, updated_at = now() WHERE id = $1
+2026-08-28 09:54:28.346 IST [14412] ERROR:  column "updated_at" of relation "tenants" does not exist at character 33
+2026-08-28 09:54:28.346 IST [14412] STATEMENT:  UPDATE tenants SET status = $2, updated_at = now() WHERE id = $1
+2026-08-28 09:59:02.103 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 09:59:11.164 IST [18384] LOG:  checkpoint complete: wrote 83 buffers (0.5%); 0 WAL file(s) added, 0 removed, 0 recycled; write=9.010 s, sync=0.035 s, total=9.062 s; sync files=68, longest=0.002 s, average=0.001 s; distance=157 kB, estimate=157 kB; lsn=0/1CB9DE8, redo lsn=0/1CB9D90
+2026-08-28 10:04:02.182 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 10:04:03.532 IST [18384] LOG:  checkpoint complete: wrote 13 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.331 s, sync=0.009 s, total=1.351 s; sync files=12, longest=0.002 s, average=0.001 s; distance=37 kB, estimate=145 kB; lsn=0/1CC3288, redo lsn=0/1CC3230
+2026-08-28 10:09:02.567 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 10:09:04.544 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.846 s, sync=0.009 s, total=1.978 s; sync files=10, longest=0.002 s, average=0.001 s; distance=25 kB, estimate=133 kB; lsn=0/1CC9A68, redo lsn=0/1CC99D8
+2026-08-28 10:14:02.563 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 10:14:03.466 IST [18384] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.868 s, sync=0.019 s, total=0.904 s; sync files=9, longest=0.013 s, average=0.003 s; distance=19 kB, estimate=122 kB; lsn=0/1CCE710, redo lsn=0/1CCE6B8
+2026-08-28 10:16:00.434 IST [22316] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 10:19:02.478 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 10:19:03.536 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.984 s, sync=0.008 s, total=1.059 s; sync files=8, longest=0.003 s, average=0.001 s; distance=12 kB, estimate=111 kB; lsn=0/1CD1758, redo lsn=0/1CD1700
+2026-08-28 10:44:02.596 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 10:44:08.691 IST [18384] LOG:  checkpoint complete: wrote 55 buffers (0.3%); 0 WAL file(s) added, 0 removed, 0 recycled; write=5.993 s, sync=0.050 s, total=6.095 s; sync files=54, longest=0.012 s, average=0.001 s; distance=127 kB, estimate=127 kB; lsn=0/1CF1690, redo lsn=0/1CF1600
+2026-08-28 10:49:02.706 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 10:49:03.848 IST [18384] LOG:  checkpoint complete: wrote 11 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.108 s, sync=0.021 s, total=1.143 s; sync files=12, longest=0.013 s, average=0.002 s; distance=38 kB, estimate=118 kB; lsn=0/1CFAE60, redo lsn=0/1CFAE08
+2026-08-28 10:54:02.849 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 10:54:03.964 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.061 s, sync=0.010 s, total=1.116 s; sync files=10, longest=0.004 s, average=0.001 s; distance=28 kB, estimate=109 kB; lsn=0/1D020A8, redo lsn=0/1D02018
+2026-08-28 10:59:02.968 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 10:59:03.978 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.975 s, sync=0.018 s, total=1.011 s; sync files=10, longest=0.012 s, average=0.002 s; distance=14 kB, estimate=100 kB; lsn=0/1D05AE0, redo lsn=0/1D05A88
+2026-08-28 11:03:54.001 IST [31372] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 11:03:54.001 IST [24312] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 11:04:03.001 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 11:04:05.412 IST [18384] LOG:  checkpoint complete: wrote 21 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=2.370 s, sync=0.024 s, total=2.412 s; sync files=14, longest=0.015 s, average=0.002 s; distance=73 kB, estimate=97 kB; lsn=0/1D17F60, redo lsn=0/1D17F08
+2026-08-28 11:04:50.848 IST [13376] ERROR:  invalid input syntax for type uuid: ""
+2026-08-28 11:04:50.848 IST [13376] CONTEXT:  unnamed portal parameter $2 = ''
+2026-08-28 11:04:50.848 IST [13376] STATEMENT:  INSERT INTO oauth_states (state_hash, tenant_id, provider, session_hash, expires_at)
+	         VALUES ($1, $2, $3, $4, $5)
+2026-08-28 11:05:30.792 IST [13376] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 11:07:44.420 IST [8460] ERROR:  null value in column "tenant_id" of relation "oauth_states" violates not-null constraint
+2026-08-28 11:07:44.420 IST [8460] DETAIL:  Failing row contains (90163b26-9b84-48e4-88f3-8eb2415c3293, 4d3f86b52afc986e0ce59edfa98dd505f227ed9a8e00efaeec7171ae56e825e8, null, google, 4d3f86b52afc986e0ce59edfa98dd505f227ed9a8e00efaeec7171ae56e825e8, 2026-08-28 11:22:44.411+05:30, null, 2026-08-28 11:07:44.410819+05:30).
+2026-08-28 11:07:44.420 IST [8460] STATEMENT:  INSERT INTO oauth_states (state_hash, tenant_id, provider, session_hash, expires_at)
+	         VALUES ($1, $2, $3, $4, $5)
+2026-08-28 11:08:16.745 IST [8460] ERROR:  new row for relation "oauth_states" violates check constraint "oauth_states_provider_check"
+2026-08-28 11:08:16.745 IST [8460] DETAIL:  Failing row contains (84a1d99f-e207-426f-b75a-bf8d81fc11de, 707aa153fd19e791c64198febb84f9da214ba3bef26bf94a20aaba05dec2c9ce, null, google, 707aa153fd19e791c64198febb84f9da214ba3bef26bf94a20aaba05dec2c9ce, 2026-08-28 11:23:16.744+05:30, null, 2026-08-28 11:08:16.744397+05:30).
+2026-08-28 11:08:16.745 IST [8460] STATEMENT:  INSERT INTO oauth_states (state_hash, tenant_id, provider, session_hash, expires_at)
+	         VALUES ($1, $2, $3, $4, $5)
+2026-08-28 11:08:41.233 IST [8460] ERROR:  relation "oauth_states" does not exist at character 13
+2026-08-28 11:08:41.233 IST [8460] STATEMENT:  INSERT INTO oauth_states (state_hash, tenant_id, provider, session_hash, expires_at)
+	         VALUES ($1, $2, $3, $4, $5)
+2026-08-28 11:08:49.302 IST [27236] ERROR:  relation "oauth_states" does not exist
+2026-08-28 11:08:49.302 IST [27236] STATEMENT:  ALTER TABLE oauth_states DROP CONSTRAINT oauth_states_provider_check;
+2026-08-28 11:09:02.161 IST [8460] ERROR:  relation "oauth_states" does not exist at character 13
+2026-08-28 11:09:02.161 IST [8460] STATEMENT:  INSERT INTO oauth_states (state_hash, tenant_id, provider, session_hash, expires_at)
+	         VALUES ($1, $2, $3, $4, $5)
+2026-08-28 11:09:03.419 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 11:09:06.366 IST [18384] LOG:  checkpoint complete: wrote 25 buffers (0.2%); 0 WAL file(s) added, 0 removed, 0 recycled; write=2.888 s, sync=0.020 s, total=2.947 s; sync files=23, longest=0.006 s, average=0.001 s; distance=89 kB, estimate=96 kB; lsn=0/1D2E490, redo lsn=0/1D2E438
+2026-08-28 11:09:13.079 IST [8460] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 11:14:03.376 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 11:14:04.387 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.987 s, sync=0.013 s, total=1.012 s; sync files=10, longest=0.004 s, average=0.002 s; distance=18 kB, estimate=88 kB; lsn=0/1D33058, redo lsn=0/1D33000
+2026-08-28 11:14:26.923 IST [26388] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 11:19:03.395 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 11:19:04.395 IST [18384] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.905 s, sync=0.065 s, total=1.000 s; sync files=9, longest=0.056 s, average=0.008 s; distance=22 kB, estimate=82 kB; lsn=0/1D389D0, redo lsn=0/1D38978
+2026-08-28 11:19:41.782 IST [13752] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 11:20:36.517 IST [15424] ERROR:  syntax error at or near ";" at character 415
+2026-08-28 11:20:36.517 IST [15424] STATEMENT:  
+	DROP TABLE IF EXISTS oauth_states;
+	CREATE TABLE oauth_states (
+	  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+	  state_hash TEXT UNIQUE NOT NULL,
+	  tenant_id UUID NULL REFERENCES tenants(id) ON DELETE CASCADE,
+	  provider TEXT NOT NULL CHECK (provider IN ('stripe','qbo','google')),
+	  session_hash TEXT NOT NULL,
+	  expires_at TIMESTAMPTZ NOT NULL,
+	  consumed_at TIMESTAMPTZ,
+	  created_at TIMESTAMPTZ DEFAULT now();
+	);
+	CREATE INDEX IF NOT EXISTS idx_oauth_states_expiry ON oauth_states(expires_at);
+	
+2026-08-28 11:20:47.042 IST [21056] ERROR:  syntax error at end of input at character 28
+2026-08-28 11:20:47.042 IST [21056] STATEMENT:  CREATE TABLE oauth_states (
+2026-08-28 11:20:47.239 IST [10708] ERROR:  relation "oauth_states" does not exist
+2026-08-28 11:20:47.239 IST [10708] STATEMENT:  CREATE INDEX IF NOT EXISTS idx_oauth_states_expiry ON oauth_states(expires_at);
+2026-08-28 11:24:03.404 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 11:24:04.656 IST [18384] LOG:  checkpoint complete: wrote 12 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.205 s, sync=0.025 s, total=1.254 s; sync files=12, longest=0.013 s, average=0.003 s; distance=46 kB, estimate=78 kB; lsn=0/1D44448, redo lsn=0/1D443F0
+2026-08-28 11:26:00.761 IST [11368] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 11:26:24.444 IST [4792] ERROR:  relation "oauth_states" does not exist at character 13
+2026-08-28 11:26:24.444 IST [4792] STATEMENT:  INSERT INTO oauth_states (state_hash, tenant_id, provider, session_hash, expires_at)
+	         VALUES ($1, $2, $3, $4, $5)
+2026-08-28 11:26:35.286 IST [32212] ERROR:  syntax error at end of input at character 28
+2026-08-28 11:26:35.286 IST [32212] STATEMENT:  CREATE TABLE oauth_states (
+2026-08-28 11:26:35.444 IST [22472] ERROR:  relation "oauth_states" does not exist
+2026-08-28 11:26:35.444 IST [22472] STATEMENT:  CREATE INDEX IF NOT EXISTS idx_oauth_states_expiry ON oauth_states(expires_at);
+2026-08-28 11:26:35.896 IST [4792] ERROR:  relation "oauth_states" does not exist at character 13
+2026-08-28 11:26:35.896 IST [4792] STATEMENT:  INSERT INTO oauth_states (state_hash, tenant_id, provider, session_hash, expires_at)
+	         VALUES ($1, $2, $3, $4, $5)
+2026-08-28 11:26:45.170 IST [5784] ERROR:  syntax error at end of input at character 28
+2026-08-28 11:26:45.170 IST [5784] STATEMENT:  CREATE TABLE oauth_states (
+2026-08-28 11:26:45.405 IST [34476] ERROR:  relation "oauth_states" does not exist
+2026-08-28 11:26:45.405 IST [34476] STATEMENT:  CREATE INDEX IF NOT EXISTS idx_oauth_states_expiry ON oauth_states(expires_at);
+2026-08-28 11:26:45.790 IST [23172] ERROR:  relation "oauth_states" does not exist at character 22
+2026-08-28 11:26:45.790 IST [23172] STATEMENT:  SELECT COUNT(*) FROM oauth_states;
+2026-08-28 11:26:55.419 IST [12340] ERROR:  relation "oauth_states" does not exist at character 22
+2026-08-28 11:26:55.419 IST [12340] STATEMENT:  SELECT COUNT(*) FROM oauth_states;
+2026-08-28 11:26:55.747 IST [4792] ERROR:  relation "oauth_states" does not exist at character 13
+2026-08-28 11:26:55.747 IST [4792] STATEMENT:  INSERT INTO oauth_states (state_hash, tenant_id, provider, session_hash, expires_at)
+	         VALUES ($1, $2, $3, $4, $5)
+2026-08-28 11:27:06.278 IST [21768] ERROR:  relation "oauth_states" does not exist at character 22
+2026-08-28 11:27:06.278 IST [21768] STATEMENT:  SELECT COUNT(*) FROM oauth_states;
+2026-08-28 11:27:06.615 IST [4792] ERROR:  relation "oauth_states" does not exist at character 13
+2026-08-28 11:27:06.615 IST [4792] STATEMENT:  INSERT INTO oauth_states (state_hash, tenant_id, provider, session_hash, expires_at)
+	         VALUES ($1, $2, $3, $4, $5)
+2026-08-28 11:27:19.620 IST [20416] ERROR:  relation "oauth_states" does not exist at character 22
+2026-08-28 11:27:19.620 IST [20416] STATEMENT:  SELECT COUNT(*) FROM oauth_states;
+2026-08-28 11:27:19.834 IST [4792] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 11:29:03.671 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 11:29:04.586 IST [18384] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.875 s, sync=0.024 s, total=0.916 s; sync files=9, longest=0.013 s, average=0.003 s; distance=18 kB, estimate=72 kB; lsn=0/1D48F90, redo lsn=0/1D48F38
+2026-08-28 11:32:40.042 IST [28180] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 11:32:50.884 IST [19532] ERROR:  relation "oauth_states" does not exist at character 22
+2026-08-28 11:32:50.884 IST [19532] STATEMENT:  SELECT COUNT(*) FROM oauth_states;
+2026-08-28 11:33:07.351 IST [31572] ERROR:  syntax error at end of input at character 28
+2026-08-28 11:33:07.351 IST [31572] STATEMENT:  CREATE TABLE oauth_states (
+2026-08-28 11:33:07.583 IST [24232] ERROR:  relation "oauth_states" does not exist
+2026-08-28 11:33:07.583 IST [24232] STATEMENT:  CREATE INDEX IF NOT EXISTS idx_oauth_states_expiry ON oauth_states(expires_at);
+2026-08-28 11:33:08.110 IST [4300] ERROR:  relation "oauth_states" does not exist at character 22
+2026-08-28 11:33:08.110 IST [4300] STATEMENT:  SELECT COUNT(*) FROM oauth_states;
+2026-08-28 11:34:03.590 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 11:34:04.546 IST [18384] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.857 s, sync=0.041 s, total=0.956 s; sync files=9, longest=0.035 s, average=0.005 s; distance=21 kB, estimate=67 kB; lsn=0/1D4E418, redo lsn=0/1D4E3C0
+2026-08-28 11:38:27.139 IST [16940] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 11:39:03.567 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 11:39:09.143 IST [18384] LOG:  checkpoint complete: wrote 47 buffers (0.3%); 0 WAL file(s) added, 0 removed, 0 recycled; write=5.482 s, sync=0.037 s, total=5.577 s; sync files=45, longest=0.004 s, average=0.001 s; distance=218 kB, estimate=218 kB; lsn=0/1D89F80, redo lsn=0/1D84D30
+2026-08-28 11:44:03.150 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 11:44:05.810 IST [18384] LOG:  checkpoint complete: wrote 25 buffers (0.2%); 0 WAL file(s) added, 0 removed, 0 recycled; write=2.590 s, sync=0.058 s, total=2.660 s; sync files=19, longest=0.048 s, average=0.004 s; distance=54 kB, estimate=201 kB; lsn=0/1D92730, redo lsn=0/1D926D8
+2026-08-28 11:49:03.824 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 11:49:04.937 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.996 s, sync=0.054 s, total=1.117 s; sync files=10, longest=0.048 s, average=0.006 s; distance=30 kB, estimate=184 kB; lsn=0/1D9A020, redo lsn=0/1D99FB0
+2026-08-28 11:52:33.060 IST [31764] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 11:54:03.953 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 11:54:04.896 IST [18384] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.877 s, sync=0.008 s, total=0.943 s; sync files=9, longest=0.002 s, average=0.001 s; distance=16 kB, estimate=167 kB; lsn=0/1D9E348, redo lsn=0/1D9E2F0
+2026-08-28 11:55:24.388 IST [14064] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 11:57:19.176 IST [20236] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 11:59:03.897 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 11:59:05.048 IST [18384] LOG:  checkpoint complete: wrote 11 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.079 s, sync=0.058 s, total=1.151 s; sync files=11, longest=0.048 s, average=0.006 s; distance=31 kB, estimate=154 kB; lsn=0/1DA62F8, redo lsn=0/1DA62A0
+2026-08-28 12:04:03.052 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 12:04:03.856 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.786 s, sync=0.008 s, total=0.805 s; sync files=8, longest=0.002 s, average=0.001 s; distance=13 kB, estimate=140 kB; lsn=0/1DA97A0, redo lsn=0/1DA9748
+2026-08-28 12:09:03.866 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 12:09:04.678 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.778 s, sync=0.013 s, total=0.813 s; sync files=8, longest=0.003 s, average=0.002 s; distance=15 kB, estimate=127 kB; lsn=0/1DAD508, redo lsn=0/1DAD478
+2026-08-28 12:14:03.695 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 12:14:04.808 IST [18384] LOG:  checkpoint complete: wrote 11 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.094 s, sync=0.008 s, total=1.113 s; sync files=11, longest=0.002 s, average=0.001 s; distance=41 kB, estimate=119 kB; lsn=0/1DB7950, redo lsn=0/1DB78F8
+2026-08-28 12:19:03.817 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 12:19:04.594 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.763 s, sync=0.005 s, total=0.778 s; sync files=8, longest=0.002 s, average=0.001 s; distance=12 kB, estimate=108 kB; lsn=0/1DBA9F8, redo lsn=0/1DBA9A0
+2026-08-28 12:24:03.594 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 12:24:04.394 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.756 s, sync=0.022 s, total=0.800 s; sync files=8, longest=0.013 s, average=0.003 s; distance=14 kB, estimate=98 kB; lsn=0/1DBE2E8, redo lsn=0/1DBE290
+2026-08-28 12:29:03.410 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 12:29:04.204 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.770 s, sync=0.007 s, total=0.795 s; sync files=8, longest=0.002 s, average=0.001 s; distance=16 kB, estimate=90 kB; lsn=0/1DC2448, redo lsn=0/1DC23F0
+2026-08-28 12:34:03.209 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 12:34:04.468 IST [18384] LOG:  checkpoint complete: wrote 12 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.223 s, sync=0.019 s, total=1.259 s; sync files=12, longest=0.012 s, average=0.002 s; distance=39 kB, estimate=85 kB; lsn=0/1DCC130, redo lsn=0/1DCC0D8
+2026-08-28 12:39:03.478 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 12:39:04.485 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.992 s, sync=0.008 s, total=1.008 s; sync files=10, longest=0.002 s, average=0.001 s; distance=29 kB, estimate=79 kB; lsn=0/1DD3798, redo lsn=0/1DD3740
+2026-08-28 12:44:03.488 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 12:44:04.398 IST [18384] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.878 s, sync=0.019 s, total=0.910 s; sync files=9, longest=0.012 s, average=0.003 s; distance=15 kB, estimate=73 kB; lsn=0/1DD7620, redo lsn=0/1DD75C8
+2026-08-28 12:49:03.398 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 12:49:04.427 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.995 s, sync=0.018 s, total=1.029 s; sync files=10, longest=0.012 s, average=0.002 s; distance=23 kB, estimate=68 kB; lsn=0/1DDD490, redo lsn=0/1DDD438
+2026-08-28 12:54:03.432 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 12:54:04.220 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.767 s, sync=0.012 s, total=0.789 s; sync files=8, longest=0.004 s, average=0.002 s; distance=12 kB, estimate=62 kB; lsn=0/1DE0690, redo lsn=0/1DE0638
+2026-08-28 12:59:03.229 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 12:59:04.029 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.772 s, sync=0.017 s, total=0.801 s; sync files=8, longest=0.012 s, average=0.003 s; distance=14 kB, estimate=58 kB; lsn=0/1DE40E8, redo lsn=0/1DE4090
+2026-08-28 13:04:03.039 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 13:04:03.950 IST [18384] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.882 s, sync=0.017 s, total=0.911 s; sync files=9, longest=0.012 s, average=0.002 s; distance=24 kB, estimate=54 kB; lsn=0/1DEA228, redo lsn=0/1DEA1D0
+2026-08-28 13:09:03.953 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 13:09:04.968 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.996 s, sync=0.007 s, total=1.016 s; sync files=10, longest=0.002 s, average=0.001 s; distance=27 kB, estimate=51 kB; lsn=0/1DF0F98, redo lsn=0/1DF0F40
+2026-08-28 13:14:03.971 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 13:14:04.773 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.766 s, sync=0.018 s, total=0.802 s; sync files=8, longest=0.012 s, average=0.003 s; distance=13 kB, estimate=48 kB; lsn=0/1DF4638, redo lsn=0/1DF45A8
+2026-08-28 13:19:03.784 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 13:19:04.586 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.774 s, sync=0.016 s, total=0.803 s; sync files=8, longest=0.012 s, average=0.002 s; distance=15 kB, estimate=44 kB; lsn=0/1DF84C0, redo lsn=0/1DF8468
+2026-08-28 13:24:03.596 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 13:24:04.848 IST [18384] LOG:  checkpoint complete: wrote 12 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.211 s, sync=0.018 s, total=1.253 s; sync files=12, longest=0.012 s, average=0.002 s; distance=38 kB, estimate=44 kB; lsn=0/1E01ED0, redo lsn=0/1E01E78
+2026-08-28 13:29:03.852 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 13:29:04.639 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.773 s, sync=0.006 s, total=0.788 s; sync files=8, longest=0.002 s, average=0.001 s; distance=12 kB, estimate=41 kB; lsn=0/1E05238, redo lsn=0/1E051E0
+2026-08-28 13:34:03.648 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 13:34:04.691 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.997 s, sync=0.020 s, total=1.043 s; sync files=10, longest=0.012 s, average=0.002 s; distance=31 kB, estimate=40 kB; lsn=0/1E0CF60, redo lsn=0/1E0CF08
+2026-08-28 13:39:03.702 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 13:39:04.749 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.998 s, sync=0.023 s, total=1.048 s; sync files=10, longest=0.014 s, average=0.003 s; distance=22 kB, estimate=38 kB; lsn=0/1E12AD8, redo lsn=0/1E12A80
+2026-08-28 13:44:03.755 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 13:44:04.563 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.778 s, sync=0.006 s, total=0.808 s; sync files=8, longest=0.002 s, average=0.001 s; distance=11 kB, estimate=35 kB; lsn=0/1E159E8, redo lsn=0/1E15990
+2026-08-28 13:49:03.567 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 13:49:04.354 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.769 s, sync=0.007 s, total=0.788 s; sync files=8, longest=0.002 s, average=0.001 s; distance=13 kB, estimate=33 kB; lsn=0/1E19180, redo lsn=0/1E19128
+2026-08-28 13:54:03.365 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 13:54:04.168 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.761 s, sync=0.021 s, total=0.803 s; sync files=8, longest=0.013 s, average=0.003 s; distance=15 kB, estimate=31 kB; lsn=0/1E1D160, redo lsn=0/1E1D108
+2026-08-28 13:59:03.171 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 13:59:04.308 IST [18384] LOG:  checkpoint complete: wrote 11 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.107 s, sync=0.006 s, total=1.138 s; sync files=11, longest=0.002 s, average=0.001 s; distance=41 kB, estimate=41 kB; lsn=0/1E27880, redo lsn=0/1E27828
+2026-08-28 14:04:03.323 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 14:04:04.137 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.777 s, sync=0.016 s, total=0.815 s; sync files=8, longest=0.012 s, average=0.002 s; distance=12 kB, estimate=38 kB; lsn=0/1E2ABD8, redo lsn=0/1E2AB80
+2026-08-28 14:09:03.145 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 14:09:04.175 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.938 s, sync=0.081 s, total=1.030 s; sync files=8, longest=0.074 s, average=0.010 s; distance=14 kB, estimate=36 kB; lsn=0/1E2E7A0, redo lsn=0/1E2E748
+2026-08-28 14:14:03.185 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 14:14:04.520 IST [18384] LOG:  checkpoint complete: wrote 12 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.212 s, sync=0.063 s, total=1.339 s; sync files=12, longest=0.048 s, average=0.006 s; distance=37 kB, estimate=37 kB; lsn=0/1E37ED8, redo lsn=0/1E37E80
+2026-08-28 14:19:03.536 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 14:19:04.429 IST [18384] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.780 s, sync=0.053 s, total=0.893 s; sync files=8, longest=0.048 s, average=0.007 s; distance=12 kB, estimate=35 kB; lsn=0/1E3AF68, redo lsn=0/1E3AF10
+2026-08-28 14:24:03.431 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 14:24:04.986 IST [18384] LOG:  checkpoint complete: wrote 12 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.425 s, sync=0.062 s, total=1.556 s; sync files=12, longest=0.049 s, average=0.006 s; distance=38 kB, estimate=38 kB; lsn=0/1E44990, redo lsn=0/1E44938
+2026-08-28 14:29:04.007 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 14:29:05.105 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.029 s, sync=0.011 s, total=1.098 s; sync files=10, longest=0.003 s, average=0.002 s; distance=22 kB, estimate=36 kB; lsn=0/1E4A388, redo lsn=0/1E4A330
+2026-08-28 14:32:16.107 IST [27192] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 14:34:04.108 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 14:34:05.652 IST [18384] LOG:  checkpoint complete: wrote 13 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.408 s, sync=0.073 s, total=1.545 s; sync files=13, longest=0.058 s, average=0.006 s; distance=22 kB, estimate=35 kB; lsn=0/1E4FBC8, redo lsn=0/1E4FB70
+2026-08-28 14:38:08.124 IST [26920] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 14:39:04.661 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 14:39:05.622 IST [18384] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.889 s, sync=0.011 s, total=0.962 s; sync files=9, longest=0.005 s, average=0.002 s; distance=19 kB, estimate=33 kB; lsn=0/1E54868, redo lsn=0/1E547D8
+2026-08-28 14:41:07.394 IST [31848] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 14:42:36.604 IST [28092] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 14:44:04.626 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 14:44:06.031 IST [18384] LOG:  checkpoint complete: wrote 13 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.332 s, sync=0.009 s, total=1.405 s; sync files=13, longest=0.002 s, average=0.001 s; distance=27 kB, estimate=33 kB; lsn=0/1E5B818, redo lsn=0/1E5B7C0
+2026-08-28 14:44:52.928 IST [15924] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 14:49:04.032 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 14:49:05.808 IST [18384] LOG:  checkpoint complete: wrote 16 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.694 s, sync=0.013 s, total=1.776 s; sync files=16, longest=0.002 s, average=0.001 s; distance=52 kB, estimate=52 kB; lsn=0/1E68BD8, redo lsn=0/1E68B80
+2026-08-28 14:54:04.843 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 14:54:05.725 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.757 s, sync=0.060 s, total=0.883 s; sync files=8, longest=0.049 s, average=0.008 s; distance=12 kB, estimate=48 kB; lsn=0/1E6BC60, redo lsn=0/1E6BC08
+2026-08-28 14:59:04.740 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 14:59:05.581 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.783 s, sync=0.048 s, total=0.842 s; sync files=8, longest=0.040 s, average=0.006 s; distance=14 kB, estimate=45 kB; lsn=0/1E6F518, redo lsn=0/1E6F4C0
+2026-08-28 15:04:04.592 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 15:04:05.837 IST [18384] LOG:  checkpoint complete: wrote 11 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.129 s, sync=0.054 s, total=1.246 s; sync files=12, longest=0.047 s, average=0.005 s; distance=37 kB, estimate=44 kB; lsn=0/1E789A8, redo lsn=0/1E78918
+2026-08-28 15:09:04.841 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 15:09:05.812 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.845 s, sync=0.060 s, total=0.971 s; sync files=8, longest=0.048 s, average=0.008 s; distance=11 kB, estimate=41 kB; lsn=0/1E7B6F0, redo lsn=0/1E7B698
+2026-08-28 15:13:33.008 IST [26156] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 15:14:04.818 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 15:14:06.396 IST [18384] LOG:  checkpoint complete: wrote 15 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.507 s, sync=0.013 s, total=1.579 s; sync files=15, longest=0.003 s, average=0.001 s; distance=43 kB, estimate=43 kB; lsn=0/1E865C8, redo lsn=0/1E86570
+2026-08-28 15:19:04.407 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 15:19:05.513 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.003 s, sync=0.059 s, total=1.107 s; sync files=10, longest=0.049 s, average=0.006 s; distance=22 kB, estimate=41 kB; lsn=0/1E8BE88, redo lsn=0/1E8BE30
+2026-08-28 15:24:04.523 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 15:24:05.852 IST [18384] LOG:  checkpoint complete: wrote 12 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.257 s, sync=0.011 s, total=1.330 s; sync files=12, longest=0.003 s, average=0.001 s; distance=17 kB, estimate=39 kB; lsn=0/1E90328, redo lsn=0/1E902D0
+2026-08-28 15:29:04.860 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 15:29:05.786 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.801 s, sync=0.056 s, total=0.927 s; sync files=8, longest=0.048 s, average=0.007 s; distance=12 kB, estimate=36 kB; lsn=0/1E936A8, redo lsn=0/1E93650
+2026-08-28 17:15:36.347 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 17:15:37.170 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.790 s, sync=0.006 s, total=0.824 s; sync files=8, longest=0.002 s, average=0.001 s; distance=15 kB, estimate=34 kB; lsn=0/1E972B0, redo lsn=0/1E97258
+2026-08-28 17:16:52.812 IST [5048] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-08-28 17:20:36.174 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 17:20:37.283 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.014 s, sync=0.063 s, total=1.109 s; sync files=10, longest=0.049 s, average=0.007 s; distance=30 kB, estimate=33 kB; lsn=0/1E9ED50, redo lsn=0/1E9ECF8
+2026-08-28 17:25:05.829 IST [5040] LOG:  could not reserve shared memory region (addr=0000024300000000) for child 000000000000137C: error code 487
+2026-08-28 17:25:36.298 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 17:25:37.415 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.031 s, sync=0.014 s, total=1.118 s; sync files=10, longest=0.004 s, average=0.002 s; distance=34 kB, estimate=34 kB; lsn=0/1EA78A8, redo lsn=0/1EA7850
+2026-08-28 17:30:36.419 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 17:30:37.314 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.764 s, sync=0.068 s, total=0.895 s; sync files=8, longest=0.060 s, average=0.009 s; distance=13 kB, estimate=32 kB; lsn=0/1EAAF10, redo lsn=0/1EAAEB8
+2026-08-28 17:35:36.373 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 17:35:37.647 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.161 s, sync=0.054 s, total=1.274 s; sync files=10, longest=0.047 s, average=0.006 s; distance=27 kB, estimate=32 kB; lsn=0/1EB1C68, redo lsn=0/1EB1BD8
+2026-08-28 17:40:36.736 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 17:40:37.925 IST [18384] LOG:  checkpoint complete: wrote 11 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.120 s, sync=0.056 s, total=1.190 s; sync files=11, longest=0.048 s, average=0.006 s; distance=33 kB, estimate=33 kB; lsn=0/1EBA418, redo lsn=0/1EBA3C0
+2026-08-28 17:45:37.006 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 17:45:37.829 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.756 s, sync=0.052 s, total=0.823 s; sync files=8, longest=0.047 s, average=0.007 s; distance=12 kB, estimate=31 kB; lsn=0/1EBD790, redo lsn=0/1EBD738
+2026-08-28 17:50:37.905 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 17:50:39.021 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.031 s, sync=0.012 s, total=1.117 s; sync files=10, longest=0.004 s, average=0.002 s; distance=31 kB, estimate=31 kB; lsn=0/1EC5528, redo lsn=0/1EC5498
+2026-08-28 17:55:37.086 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 17:55:38.233 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.017 s, sync=0.062 s, total=1.148 s; sync files=10, longest=0.048 s, average=0.007 s; distance=22 kB, estimate=30 kB; lsn=0/1ECB0C8, redo lsn=0/1ECB070
+2026-08-28 18:00:37.290 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 18:00:38.158 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.784 s, sync=0.011 s, total=0.869 s; sync files=8, longest=0.004 s, average=0.002 s; distance=11 kB, estimate=29 kB; lsn=0/1ECE028, redo lsn=0/1ECDFB8
+2026-08-28 18:05:37.216 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 18:05:38.126 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.787 s, sync=0.058 s, total=0.910 s; sync files=8, longest=0.048 s, average=0.008 s; distance=13 kB, estimate=27 kB; lsn=0/1ED17D0, redo lsn=0/1ED1740
+2026-08-28 18:10:37.181 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 18:10:38.119 IST [18384] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.903 s, sync=0.018 s, total=0.939 s; sync files=9, longest=0.012 s, average=0.002 s; distance=23 kB, estimate=27 kB; lsn=0/1ED7670, redo lsn=0/1ED7618
+2026-08-28 18:15:37.161 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 18:15:38.206 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.008 s, sync=0.007 s, total=1.046 s; sync files=10, longest=0.002 s, average=0.001 s; distance=34 kB, estimate=34 kB; lsn=0/1EDFF08, redo lsn=0/1EDFEB0
+2026-08-28 18:20:37.246 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 18:20:38.039 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.779 s, sync=0.005 s, total=0.793 s; sync files=8, longest=0.002 s, average=0.001 s; distance=12 kB, estimate=32 kB; lsn=0/1EE3260, redo lsn=0/1EE3208
+2026-08-28 18:25:37.080 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 18:25:38.158 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.020 s, sync=0.025 s, total=1.078 s; sync files=10, longest=0.013 s, average=0.003 s; distance=26 kB, estimate=31 kB; lsn=0/1EE9C88, redo lsn=0/1EE9C30
+2026-08-28 18:30:37.199 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 18:30:41.395 IST [18384] LOG:  checkpoint complete: wrote 40 buffers (0.2%); 0 WAL file(s) added, 0 removed, 0 recycled; write=4.153 s, sync=0.021 s, total=4.196 s; sync files=35, longest=0.003 s, average=0.001 s; distance=83 kB, estimate=83 kB; lsn=0/1EFE9B0, redo lsn=0/1EFE958
+2026-08-28 18:35:37.424 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 18:35:40.493 IST [18384] LOG:  checkpoint complete: wrote 30 buffers (0.2%); 0 WAL file(s) added, 0 removed, 0 recycled; write=3.025 s, sync=0.014 s, total=3.069 s; sync files=29, longest=0.002 s, average=0.001 s; distance=72 kB, estimate=82 kB; lsn=0/1F10A68, redo lsn=0/1F109D8
+2026-08-28 18:40:37.526 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 18:40:38.592 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.017 s, sync=0.014 s, total=1.068 s; sync files=10, longest=0.004 s, average=0.002 s; distance=30 kB, estimate=76 kB; lsn=0/1F183B0, redo lsn=0/1F18358
+2026-08-28 18:45:37.621 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 18:45:38.674 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.013 s, sync=0.008 s, total=1.054 s; sync files=10, longest=0.002 s, average=0.001 s; distance=22 kB, estimate=71 kB; lsn=0/1F1DDC0, redo lsn=0/1F1DD68
+2026-08-28 18:50:37.694 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 18:50:38.517 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.792 s, sync=0.018 s, total=0.824 s; sync files=8, longest=0.013 s, average=0.003 s; distance=11 kB, estimate=65 kB; lsn=0/1F20A60, redo lsn=0/1F209D0
+2026-08-28 18:55:37.548 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 18:55:38.378 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.792 s, sync=0.006 s, total=0.831 s; sync files=8, longest=0.002 s, average=0.001 s; distance=13 kB, estimate=60 kB; lsn=0/1F23F30, redo lsn=0/1F23ED8
+2026-08-28 19:00:37.407 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 19:00:38.335 IST [18384] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.889 s, sync=0.011 s, total=0.929 s; sync files=9, longest=0.004 s, average=0.002 s; distance=22 kB, estimate=56 kB; lsn=0/1F29B00, redo lsn=0/1F29AA8
+2026-08-28 19:05:37.360 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 19:05:38.432 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.021 s, sync=0.019 s, total=1.073 s; sync files=10, longest=0.012 s, average=0.002 s; distance=33 kB, estimate=54 kB; lsn=0/1F320D8, redo lsn=0/1F32080
+2026-08-28 19:10:37.459 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 19:10:38.417 IST [18384] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.898 s, sync=0.025 s, total=0.959 s; sync files=9, longest=0.013 s, average=0.003 s; distance=12 kB, estimate=50 kB; lsn=0/1F351A0, redo lsn=0/1F35148
+2026-08-28 19:15:37.436 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 19:15:38.245 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.782 s, sync=0.006 s, total=0.810 s; sync files=8, longest=0.002 s, average=0.001 s; distance=14 kB, estimate=46 kB; lsn=0/1F38A80, redo lsn=0/1F38A28
+2026-08-28 19:20:37.264 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 19:20:38.501 IST [18384] LOG:  checkpoint complete: wrote 12 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.209 s, sync=0.007 s, total=1.238 s; sync files=12, longest=0.002 s, average=0.001 s; distance=37 kB, estimate=45 kB; lsn=0/1F41F30, redo lsn=0/1F41ED8
+2026-08-28 19:25:37.522 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 19:25:38.350 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.778 s, sync=0.029 s, total=0.829 s; sync files=8, longest=0.018 s, average=0.004 s; distance=11 kB, estimate=42 kB; lsn=0/1F44CF0, redo lsn=0/1F44C98
+2026-08-28 19:30:37.368 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 19:30:38.196 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.786 s, sync=0.009 s, total=0.828 s; sync files=8, longest=0.003 s, average=0.002 s; distance=13 kB, estimate=39 kB; lsn=0/1F48308, redo lsn=0/1F482B0
+2026-08-28 19:35:37.206 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 19:35:38.367 IST [18384] LOG:  checkpoint complete: wrote 11 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.111 s, sync=0.026 s, total=1.161 s; sync files=11, longest=0.013 s, average=0.003 s; distance=38 kB, estimate=39 kB; lsn=0/1F51BD0, redo lsn=0/1F51B78
+2026-08-28 19:40:37.392 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 19:40:38.212 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.792 s, sync=0.017 s, total=0.821 s; sync files=8, longest=0.012 s, average=0.003 s; distance=10 kB, estimate=36 kB; lsn=0/1F54560, redo lsn=0/1F54508
+2026-08-28 19:45:37.227 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 19:45:38.045 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.775 s, sync=0.009 s, total=0.819 s; sync files=8, longest=0.003 s, average=0.002 s; distance=12 kB, estimate=33 kB; lsn=0/1F57738, redo lsn=0/1F576E0
+2026-08-28 19:50:37.045 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 19:50:37.986 IST [18384] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.904 s, sync=0.006 s, total=0.942 s; sync files=9, longest=0.002 s, average=0.001 s; distance=22 kB, estimate=32 kB; lsn=0/1F5D040, redo lsn=0/1F5CFE8
+2026-08-28 19:55:38.002 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 19:55:38.825 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.786 s, sync=0.023 s, total=0.823 s; sync files=8, longest=0.014 s, average=0.003 s; distance=16 kB, estimate=31 kB; lsn=0/1F61320, redo lsn=0/1F61290
+2026-08-28 20:00:38.841 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 20:00:39.885 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.012 s, sync=0.011 s, total=1.043 s; sync files=10, longest=0.003 s, average=0.002 s; distance=34 kB, estimate=34 kB; lsn=0/1F69EB0, redo lsn=0/1F69E58
+2026-08-28 20:05:38.903 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 20:05:39.763 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.810 s, sync=0.011 s, total=0.861 s; sync files=8, longest=0.004 s, average=0.002 s; distance=13 kB, estimate=32 kB; lsn=0/1F6D4D0, redo lsn=0/1F6D478
+2026-08-28 20:10:38.779 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 20:10:40.051 IST [18384] LOG:  checkpoint complete: wrote 12 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.231 s, sync=0.016 s, total=1.273 s; sync files=12, longest=0.004 s, average=0.002 s; distance=36 kB, estimate=36 kB; lsn=0/1F766C0, redo lsn=0/1F76668
+2026-08-28 20:15:38.056 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 20:15:38.877 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.779 s, sync=0.006 s, total=0.821 s; sync files=8, longest=0.002 s, average=0.001 s; distance=10 kB, estimate=33 kB; lsn=0/1F79190, redo lsn=0/1F79138
+2026-08-28 20:20:38.887 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 20:20:39.745 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.778 s, sync=0.026 s, total=0.858 s; sync files=8, longest=0.013 s, average=0.004 s; distance=12 kB, estimate=31 kB; lsn=0/1F7C4E8, redo lsn=0/1F7C490
+2026-08-28 20:25:38.765 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 20:25:39.944 IST [18384] LOG:  checkpoint complete: wrote 11 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.114 s, sync=0.026 s, total=1.180 s; sync files=11, longest=0.013 s, average=0.003 s; distance=37 kB, estimate=37 kB; lsn=0/1F85AA0, redo lsn=0/1F85A48
+2026-08-28 20:30:38.958 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 20:30:39.757 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.775 s, sync=0.006 s, total=0.800 s; sync files=8, longest=0.002 s, average=0.001 s; distance=9 kB, estimate=34 kB; lsn=0/1F88170, redo lsn=0/1F88118
+2026-08-28 20:35:38.767 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 20:35:39.605 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.786 s, sync=0.016 s, total=0.839 s; sync files=8, longest=0.009 s, average=0.002 s; distance=11 kB, estimate=32 kB; lsn=0/1F8B070, redo lsn=0/1F8B018
+2026-08-28 20:40:38.621 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 20:40:39.449 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.779 s, sync=0.021 s, total=0.828 s; sync files=8, longest=0.012 s, average=0.003 s; distance=13 kB, estimate=30 kB; lsn=0/1F8E7F8, redo lsn=0/1F8E7A0
+2026-08-28 20:45:38.467 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 20:45:39.414 IST [18384] LOG:  checkpoint complete: wrote 9 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.891 s, sync=0.023 s, total=0.948 s; sync files=9, longest=0.013 s, average=0.003 s; distance=23 kB, estimate=29 kB; lsn=0/1F94678, redo lsn=0/1F94620
+2026-08-28 20:50:38.429 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 20:50:39.508 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.015 s, sync=0.025 s, total=1.080 s; sync files=10, longest=0.013 s, average=0.003 s; distance=34 kB, estimate=34 kB; lsn=0/1F9CF10, redo lsn=0/1F9CEB8
+2026-08-28 20:55:38.523 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 20:55:39.294 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.756 s, sync=0.005 s, total=0.772 s; sync files=8, longest=0.002 s, average=0.001 s; distance=12 kB, estimate=32 kB; lsn=0/1FA0260, redo lsn=0/1FA0208
+2026-08-28 21:00:38.302 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 21:00:39.461 IST [18384] LOG:  checkpoint complete: wrote 11 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.120 s, sync=0.008 s, total=1.160 s; sync files=12, longest=0.002 s, average=0.001 s; distance=35 kB, estimate=35 kB; lsn=0/1FA9140, redo lsn=0/1FA90B0
+2026-08-28 21:05:38.477 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 21:05:39.279 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.769 s, sync=0.007 s, total=0.803 s; sync files=8, longest=0.002 s, average=0.001 s; distance=10 kB, estimate=33 kB; lsn=0/1FAB918, redo lsn=0/1FAB8C0
+2026-08-28 21:10:38.288 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 21:10:39.118 IST [18384] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.792 s, sync=0.013 s, total=0.830 s; sync files=8, longest=0.004 s, average=0.002 s; distance=12 kB, estimate=31 kB; lsn=0/1FAE998, redo lsn=0/1FAE940
+2026-08-28 21:15:38.129 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 21:15:39.291 IST [18384] LOG:  checkpoint complete: wrote 11 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.106 s, sync=0.020 s, total=1.163 s; sync files=11, longest=0.012 s, average=0.002 s; distance=36 kB, estimate=36 kB; lsn=0/1FB7A48, redo lsn=0/1FB79F0
+2026-08-28 21:20:38.298 IST [18384] LOG:  checkpoint starting: time
+2026-08-28 21:20:39.374 IST [18384] LOG:  checkpoint complete: wrote 10 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.014 s, sync=0.028 s, total=1.076 s; sync files=10, longest=0.014 s, average=0.003 s; distance=16 kB, estimate=34 kB; lsn=0/1FBBB88, redo lsn=0/1FBBB30

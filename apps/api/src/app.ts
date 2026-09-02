@@ -28,6 +28,7 @@ import { customerRoutes } from "./modules/customers/customers.controller.js";
 import { cronRoutes } from "./modules/cron/cron.controller.js";
 import { demoRoutes } from "./modules/demo/demo.controller.js";
 import { adminRoutes } from "./modules/admin/admin.controller.js";
+import { postmarkRoutes } from "./modules/email/postmark.controller.js";
 
 export function buildApp() {
   const app = Fastify({
@@ -155,6 +156,7 @@ export function buildApp() {
   void app.register(cronRoutes);
   void app.register(demoRoutes);
   void app.register(adminRoutes);
+  void app.register(postmarkRoutes);
 
   return app;
 }
