@@ -40,6 +40,13 @@ export function SignUp() {
     }
   }
 
+  const handleGoogleLogin = () => {
+    const googleAuthUrl = import.meta.env.VITE_API_URL?.startsWith("http")
+      ? new URL("/auth/google", import.meta.env.VITE_API_URL).toString()
+      : "/api/auth/google";
+    window.location.assign(googleAuthUrl);
+  };
+
   if (needsVerification) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-bg px-4">
@@ -107,6 +114,15 @@ export function SignUp() {
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Creating account..." : "Create account"}
           </Button>
+          <div className="flex items-center justify-center mt-4">
+            <Button 
+              variant="secondary"
+              onClick={handleGoogleLogin}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+            >
+              Sign in with Google
+            </Button>
+          </div>
           <p className="text-center text-sm text-muted">
             Already have an account?{" "}
             <Link to="/login" className="text-primary hover:underline">Sign in</Link>

@@ -7,3 +7,4 @@ DEMO-CREDENTIALS.md
 *.log
 .DS_Store
 coverage/
+.GAP-ANALYSIS.md

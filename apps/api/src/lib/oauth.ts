@@ -3,6 +3,7 @@ import { config } from "../config.js";
 import { badRequest } from "./errors.js";
 import { servicePool } from "./db.js";
 import { generateToken, hashToken } from "./auth.js";
+import { fetchWithTimeout } from "./http.js";
 
 const STATE_TTL_MS = 15 * 60 * 1000;
 const FALLBACK_SECRET = "dev-state-secret";
@@ -19,7 +20,7 @@ function sign(payload: string): string {
 }
 
 /** Encode the tenant id into an opaque, signed OAuth `state` token. */
-export async function encodeState(tenantId: string, provider: "stripe" | "qbo", sessionToken: string): Promise<string> {
+export async function encodeState(tenantId: string, provider: "stripe" | "qbo" | "google", sessionToken: string): Promise<string> {
   const token = generateToken();
   const payload = Buffer.from(
     JSON.stringify({ token, exp: Date.now() + STATE_TTL_MS }),
@@ -34,7 +35,7 @@ export async function encodeState(tenantId: string, provider: "stripe" | "qbo", 
 }
 
 /** Verify the signature/expiry of an OAuth `state` token and return the tenant id. */
-export async function decodeState(state: string, provider: "stripe" | "qbo", sessionToken: string): Promise<string> {
+export async function decodeState(state: string, provider: "stripe" | "qbo" | "google", sessionToken: string): Promise<string> {
   const dot = state.lastIndexOf(".");
   if (dot <= 0) throw badRequest("Invalid OAuth state");
   const payload = state.slice(0, dot);
@@ -61,4 +62,111 @@ export async function decodeState(state: string, provider: "stripe" | "qbo", ses
   );
   if (!claimed.rows[0]) throw badRequest("Invalid or already used OAuth state");
   return claimed.rows[0].tenant_id;
+}
+
+// ─── Google OAuth ────────────────────────────────────────────────────────────────
+export const googleEnabled = Boolean(config.googleClientId && config.googleClientSecret);
+
+const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const GOOGLE_USER_INFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
+const GOOGLE_SCOPE = "openid email profile";
+
+export function googleRedirectUri(): string {
+  return `${config.appUrl}/auth/google/callback`;
+}
+
+export function googleAuthorizeUrl(state: string): string {
+  const params = new URLSearchParams({
+    client_id: config.googleClientId,
+    response_type: "code",
+    scope: GOOGLE_SCOPE,
+    redirect_uri: googleRedirectUri(),
+    state,
+    access_type: "offline",
+    prompt: "consent",
+  });
+  return `${GOOGLE_AUTH_URL}?${params.toString()}`;
+}
+
+export type GoogleTokens = {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: string; // ISO
+  idToken: string;
+};
+
+async function requestGoogleTokens(form: URLSearchParams): Promise<GoogleTokens> {
+  const res = await fetchWithTimeout(GOOGLE_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: form.toString(),
+  }, config.providerTimeoutMs);
+
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Google token error ${res.status}: ${detail.slice(0, 300)}`);
+  }
+
+  const body = (await res.json()) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    id_token?: string;
+  };
+
+  if (!body.access_token) throw new Error("Google token response missing access token");
+  return {
+    accessToken: body.access_token,
+    refreshToken: body.refresh_token ?? "",
+    expiresAt: new Date(Date.now() + (body.expires_in ?? 3600) * 1000).toISOString(),
+    idToken: body.id_token ?? "",
+  };
+}
+
+export async function googleExchangeCode(code: string): Promise<GoogleTokens> {
+  const form = new URLSearchParams({
+    grant_type: "authorization_code",
+    code,
+    client_id: config.googleClientId,
+    client_secret: config.googleClientSecret,
+    redirect_uri: googleRedirectUri(),
+  });
+  return requestGoogleTokens(form);
+}
+
+export async function googleRefreshTokens(refreshToken: string): Promise<GoogleTokens> {
+  const form = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+    client_id: config.googleClientId,
+    client_secret: config.googleClientSecret,
+  });
+  return requestGoogleTokens(form);
+}
+
+export async function googleGetUserInfo(accessToken: string): Promise<{
+  id: string;
+  email: string;
+  verified_email: boolean;
+  name: string;
+  given_name: string;
+  family_name: string;
+  picture: string;
+  locale: string;
+}> {
+  const res = await fetchWithTimeout(GOOGLE_USER_INFO_URL, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  }, config.providerTimeoutMs);
+
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Google user info error ${res.status}: ${detail.slice(0, 300)}`);
+  }
+
+  return await res.json();
 }

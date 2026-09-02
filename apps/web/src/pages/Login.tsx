@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api } from "@/lib/api";
-import { Button, Input } from "@/components/ui";
+import { api } from "../lib/api";
+import { Button, Input } from "../components/ui";
 
 export function Login() {
   const navigate = useNavigate();
@@ -28,6 +28,13 @@ export function Login() {
       setLoading(false);
     }
   }
+
+  const handleGoogleLogin = () => {
+    const googleAuthUrl = import.meta.env.VITE_API_URL?.startsWith("http")
+      ? new URL("/auth/google", import.meta.env.VITE_API_URL).toString()
+      : "/api/auth/google";
+    window.location.assign(googleAuthUrl);
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-bg px-4">
@@ -66,11 +73,24 @@ export function Login() {
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Signing in…" : "Sign in"}
           </Button>
+          <div className="flex items-center justify-center mt-4">
+            <Button 
+              variant="secondary"
+              onClick={handleGoogleLogin}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+            >
+              SIGN IN WITH GOOGLE (TEST VERSION)
+            </Button>
+          </div>
           <div className="text-sm">
             <Link to="/forgot-password" className="text-primary hover:underline">
               Forgot password?
             </Link>
           </div>
+          <p className="text-center text-sm text-muted">
+            New to AutoCollect AI?{" "}
+            <Link to="/signup" className="text-primary hover:underline">Start your free trial</Link>
+          </p>
         </form>
       </div>
     </div>
