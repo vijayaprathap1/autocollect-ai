@@ -5,7 +5,7 @@ import { servicePool, query } from "../../lib/db.js";
 import {
   hashPassword, verifyPassword, createSession, setSessionCookie,
   clearSessionCookie, extractCookieToken, hashToken, generateToken,
-  findUserByEmail, resolveUserMembership, provisionUserAndTenant, devLogin,
+  findUserByEmail, resolveUserMembership, provisionUserAndTenant, 
 } from "../../lib/auth.js";
 import { badRequest, unauthorized, notFound } from "../../lib/errors.js";
 import { sendEmail, postmarkEnabled } from "../../lib/postmark.js";

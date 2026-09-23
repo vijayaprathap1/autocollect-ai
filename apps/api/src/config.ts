@@ -92,8 +92,9 @@ export function validateProductionConfig(): void {
   if (!config.inboundWebhookToken) missing.push("POSTMARK_WEBHOOK_TOKEN");
   if (!config.postmarkServerToken) missing.push("POSTMARK_SERVER_TOKEN");
   if (!config.cronSecret) missing.push("CRON_SECRET");
-  // Stripe keys (if stripeSecretKey is set, we expect Connect and webhook secrets)
-  if (config.stripeSecretKey) {
+  // Stripe configuration is all-or-nothing in production.
+  if (config.stripeSecretKey || config.stripeConnectClientId || config.stripeWebhookSecret) {
+    if (!config.stripeSecretKey) missing.push("STRIPE_SECRET_KEY");
     if (!config.stripeConnectClientId) missing.push("STRIPE_CONNECT_CLIENT_ID");
     if (!config.stripeWebhookSecret) missing.push("STRIPE_WEBHOOK_SECRET");
   }

@@ -6,6 +6,7 @@ import { servicePool } from "../../lib/db.js";
 import { badRequest, notFound } from "../../lib/errors.js";
 import { decodeState, encodeState } from "../../lib/oauth.js";
 import { extractCookieToken } from "../../lib/auth.js";
+import { encryptSecret } from "../../lib/crypto.js";
 import { PLAN_KEYS, setTenantPlan, type PlanKey } from "../../lib/billing.js";
 import { smsEnabled } from "../../lib/sms.js";
 import { ingestStripeInvoice, markInvoicePaid, tenantByStripeAccount } from "./ingest.service.js";
@@ -139,6 +140,9 @@ export async function stripeRoutes(app: FastifyInstance) {
       let url: string;
 
       if (stripeEnabled) {
+        if (!config.stripeConnectClientId) {
+          throw badRequest("STRIPE_CONNECT_CLIENT_ID is not configured");
+        }
         url = await stripe!.oauth.authorizeUrl({
           client_id: config.stripeConnectClientId,
           state,
@@ -176,6 +180,14 @@ export async function stripeRoutes(app: FastifyInstance) {
       if (!sessionToken) throw badRequest("Missing session cookie");
       const tenantId = await decodeState(q.state, "stripe", sessionToken);
       let stripeAccountId: string;
+      let credentials: {
+        stripe_account_id: string;
+        access_token?: string;
+        refresh_token?: string;
+        scope?: string;
+        livemode?: boolean;
+        connected_at: string;
+      };
 
       if (stripeEnabled) {
         const token = await stripe!.oauth.token({
@@ -184,9 +196,21 @@ export async function stripeRoutes(app: FastifyInstance) {
         });
         if (!token.stripe_user_id) throw badRequest("OAuth did not return an account");
         stripeAccountId = token.stripe_user_id;
+        credentials = {
+          stripe_account_id: stripeAccountId,
+          access_token: token.access_token ? encryptSecret(token.access_token) : undefined,
+          refresh_token: token.refresh_token ? encryptSecret(token.refresh_token) : undefined,
+          scope: token.scope,
+          livemode: token.livemode,
+          connected_at: new Date().toISOString(),
+        };
       } else {
         if (q.code !== "dev_stripe_code") throw badRequest("Invalid dev OAuth code");
         stripeAccountId = MOCK_ACCOUNT_ID;
+        credentials = {
+          stripe_account_id: stripeAccountId,
+          connected_at: new Date().toISOString(),
+        };
       }
 
       const client = await servicePool.connect();
@@ -196,7 +220,8 @@ export async function stripeRoutes(app: FastifyInstance) {
         await client.query(
           `INSERT INTO integrations (tenant_id, source, status, credentials)
            VALUES ($1, 'stripe', 'active', $2::jsonb)
-           ON CONFLICT DO NOTHING`,
+           ON CONFLICT (tenant_id, source) DO UPDATE
+             SET status = 'active', credentials = EXCLUDED.credentials`,
           [
             tenantId,
             JSON.stringify({ stripe_account_id: stripeAccountId, connected_at: new Date().toISOString() }),

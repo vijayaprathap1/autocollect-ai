@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Badge, Button, Card, EmptyState, Input, PageHeader, Pagination, Spinner } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, PageHeader, Pagination, Spinner, useToast, useConfirmDialog } from "@/components/ui";
 import { getInvoices, invoiceAction, type InvoiceDto } from "@/lib/api";
 import { daysUntil, formatDate, formatMoney } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -19,6 +19,7 @@ const FILTERS: { value: Filter; label: string }[] = [
 
 export function Invoices() {
   const me = useMe();
+  const { dialogState, open, close, setLoading, ConfirmDialog } = useConfirmDialog();
   const [filter, setFilter] = useState<Filter>("all");
   const [source, setSource] = useState<string>("all");
   const [q, setQ] = useState("");
@@ -35,14 +36,41 @@ export function Invoices() {
 
   const invoices = useMemo(() => data?.invoices ?? [], [data]);
 
+  const { showToast } = useToast();
+
   async function runAction(inv: InvoiceDto, action: string) {
     try {
       await invoiceAction(inv.id, action);
       await refetch();
+      showToast("Action completed successfully", "success");
     } catch (err) {
       console.error(err);
+      const apiErr = err as { message?: string };
+      showToast(apiErr.message ?? "Action failed", "error");
     }
   }
+
+  // Confirm dialog handlers
+  const confirmPause = (inv: InvoiceDto) => open(
+    "Pause invoice",
+    `Are you sure you want to pause reminders for "${inv.customerName ?? inv.externalId ?? "this invoice"}"?`,
+    () => { setLoading(true); runAction(inv, "pause").finally(() => { setLoading(false); close(); }); },
+    { variant: "secondary", confirmText: "Pause", cancelText: "Keep active" }
+  );
+
+  const confirmResume = (inv: InvoiceDto) => open(
+    "Resume invoice",
+    `Resume automated reminders for "${inv.customerName ?? inv.externalId ?? "this invoice"}"?`,
+    () => { setLoading(true); runAction(inv, "resume").finally(() => { setLoading(false); close(); }); },
+    { variant: "primary", confirmText: "Resume", cancelText: "Stay paused" }
+  );
+
+  const confirmMarkPaid = (inv: InvoiceDto) => open(
+    "Mark as paid",
+    `Mark "${inv.customerName ?? inv.externalId ?? "this invoice"}" as paid? This will stop all future reminders.`,
+    () => { setLoading(true); runAction(inv, "mark_paid").finally(() => { setLoading(false); close(); }); },
+    { variant: "danger", confirmText: "Mark paid", cancelText: "Cancel" }
+  );
 
   const noSource = !me.tenant?.invoiceCount;
 
@@ -163,14 +191,14 @@ export function Invoices() {
                             <Button
                               variant="secondary"
                               className="px-2 py-1 text-xs"
-                              onClick={() => runAction(inv, inv.status === "paused" ? "resume" : "pause")}
+                              onClick={() => inv.status === "paused" ? confirmResume(inv) : confirmPause(inv)}
                             >
                               {inv.status === "paused" ? "Resume" : "Pause"}
                             </Button>
                             <Button
                               variant="secondary"
                               className="px-2 py-1 text-xs"
-                              onClick={() => runAction(inv, "mark_paid")}
+                              onClick={() => confirmMarkPaid(inv)}
                             >
                               Mark paid
                             </Button>
@@ -196,6 +224,8 @@ export function Invoices() {
           <Pagination page={page} hasMore={data?.hasMore ?? false} onPageChange={setPage} disabled={isFetching} />
         </Card>
       )}
+    </div>
+      {ConfirmDialog()}
     </div>
   );
 }

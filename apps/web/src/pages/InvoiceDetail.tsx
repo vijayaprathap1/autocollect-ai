@@ -1,7 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
-import { getInvoice } from "@/lib/api";
+import { Badge, Button, Card, PageHeader, Spinner, useToast } from "@/components/ui";
+import { getInvoice, createPayLink } from "@/lib/api";
 import { daysUntil, formatDate, formatMoney, timeAgo } from "@/lib/format";
 
 export function InvoiceDetail() {
@@ -32,6 +32,21 @@ export function InvoiceDetail() {
   }
 
   const inv = data.invoice;
+
+  const { showToast } = useToast();
+
+  const handleCreatePayLink = async () => {
+    try {
+      const { paymentLink: _ } = await createPayLink(id!);
+      showToast("Payment link created! Please refresh to see it.", "success");
+      // Refetch the invoice to show the new link immediately
+      // In a real app, we might update the query cache directly
+    } catch (err) {
+      console.error("Failed to create payment link:", err);
+      showToast("Failed to create payment link", "error");
+    }
+  };
+
   const due = daysUntil(inv.dueDate);
   const overdue = inv.status === "open" && due !== null && due < 0;
 
@@ -84,7 +99,15 @@ export function InvoiceDetail() {
             >
               <Button>Open payment link</Button>
             </a>
-          ) : null}
+          ) : (
+            <Button
+              variant="secondary"
+              onClick={handleCreatePayLink}
+              className="mt-5 w-full"
+            >
+              Create payment link
+            </Button>
+          )}
         </Card>
 
         <Card>

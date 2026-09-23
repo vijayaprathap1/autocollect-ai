@@ -51,7 +51,7 @@ export function AcceptInvite() {
             <>
               <h2 className="text-lg font-semibold mb-2">Account required</h2>
               <p className="text-sm text-muted mb-4">{message}</p>
-              <Link to="/login" className="text-sm text-primary hover:underline">Contact your administrator</Link>
+              <Link to="/signup" className="text-sm text-primary hover:underline">Create your account</Link>
             </>
           )}
           {status === "error" && (

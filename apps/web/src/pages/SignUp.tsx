@@ -1,10 +1,9 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { Button, Input } from "@/components/ui";
 
 export function SignUp() {
-  const navigate = useNavigate();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,21 +16,16 @@ export function SignUp() {
     setError("");
     setLoading(true);
     try {
-      const res = await api.post<{ ok: boolean; userId?: string }>("/auth/signup", {
+      await api.post<{ ok: boolean; message: string }>("/auth/signup", {
         name: name.trim(),
         email: email.trim(),
         password,
       });
-      // In dev mode, signup returns a session cookie — navigate to dashboard
-      // In production, signup returns ok + no cookie — show verification message
-      if (res.userId) {
-        // Dev mode: session cookie was set by signup
-        navigate("/dashboard", { replace: true });
-        window.location.reload();
-      } else {
-        // Production: need to verify email
-        setNeedsVerification(true);
-      }
+      // Signup always returns ok: true with a message (verification email sent)
+      // In dev mode, the email is logged to console
+      // In production, it's sent via Postmark
+      // User needs to verify email before logging in
+      setNeedsVerification(true);
     } catch (err: unknown) {
       const apiErr = err as { message?: string };
       setError(apiErr.message ?? "Signup failed");
