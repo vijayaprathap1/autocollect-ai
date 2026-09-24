@@ -109,7 +109,8 @@ export function SignUp() {
             {loading ? "Creating account..." : "Create account"}
           </Button>
           <div className="flex items-center justify-center mt-4">
-            <Button 
+            <Button
+              type="button"
               variant="secondary"
               onClick={handleGoogleLogin}
               className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700"

@@ -74,8 +74,8 @@ export async function startDunningScheduler(app: FastifyInstance) {
     await processDunningQueue();
   }, 1000); // Check every second for due jobs
 
-  // Also, enqueue an initial job so we don't have to wait for the first interval.
-  await enqueueDunningJob();
+  // Also run once right away so we don't wait a full interval after boot.
+  await enqueueJob("dunning", {}, new Date());
 }
 
 /**

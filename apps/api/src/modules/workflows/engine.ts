@@ -2,7 +2,7 @@ import { servicePool } from "../../lib/db.js";
 import { sendEmail } from "../../lib/postmark.js";
 import { sendSms } from "../../lib/sms.js";
 import { renderTemplate } from "./render.js";
-import { notFound } from "../../lib/errors.js";
+import { ApiError, notFound } from "../../lib/errors.js";
 import { deductCredit } from "../../lib/billing.js";
 import { acquireJobLease, releaseJobLease } from "../../lib/job-lock.js";
 import type { WorkflowStep } from "@autocollect/shared";
@@ -27,6 +27,9 @@ type InvoiceForEngine = {
 };
 
 type WorkflowRow = { id: string; enabled: boolean; steps: WorkflowStep[] };
+
+/** Automatic retries per step before giving up (manual "send now" can still retry). */
+const MAX_SEND_ATTEMPTS = 5;
 
 const INVOICE_SELECT = `
   SELECT i.id, i.tenant_id, i.amount_due, i.currency, i.due_date, i.payment_link,
@@ -153,57 +156,68 @@ async function processOne(
   const recipient = channel === "sms" ? inv.customer_phone : inv.customer_email;
   if (!recipient) return "noop";
 
-  // We will now handle the reservation and sending in a transaction.
+  // Reserve, send, record and advance in one transaction so a crash can't
+  // double-send or leave the sequence out of step with what was sent.
   const claimClient = await servicePool.connect();
+  let finished = false; // COMMIT or ROLLBACK already issued
   try {
     await claimClient.query("BEGIN");
-    // Deduct credit for this send attempt
     const creditAvailable = await deductCredit(claimClient, inv.tenant_id, "dunning_send", inv.id);
     if (!creditAvailable) {
       await claimClient.query("ROLLBACK");
+      finished = true;
       await servicePool
         .query(
           `INSERT INTO audit_log (tenant_id, actor, action, detail)
            VALUES ($1, 'system', 'dunning_skipped_no_credits', $2::jsonb)`,
           [
             inv.tenant_id,
-            JSON.stringify({
-              invoice_id: inv.id,
-              step_index: inv.next_step_index,
-              channel: step.channel,
-            }),
+            JSON.stringify({ invoice_id: inv.id, step_index: inv.next_step_index, channel }),
           ],
         )
         .catch(() => {});
       return "noop";
     }
 
-    // Try to reserve the message for sending
-    const reservationResult = await claimClient.query(
-      `
-      WITH upsert AS (
-        UPDATE messages
-        SET reserved_until = now() + interval '5 minutes'
-        WHERE tenant_id = $1 AND invoice_id = $2 AND step_index = $3
-          AND status = 'sending'
-          AND (reserved_until IS NULL OR reserved_until < now())
-        RETURNING *
-      )
-      INSERT INTO messages (tenant_id, invoice_id, step_index, status, reserved_until)
-      SELECT $1, $2, $3, 'sending', now() + interval '5 minutes'
-      WHERE NOT EXISTS (SELECT 1 FROM upsert)
-      RETURNING *
-      `,
-      [inv.tenant_id, inv.id, inv.next_step_index]
+    // Claim this (invoice, step). A row left 'sending' by a crashed worker is
+    // reclaimed once its lease expires; a 'failed' row is retried with backoff
+    // (manual "send now" retries immediately).
+    const claim = await claimClient.query<{ attempts: number }>(
+      `INSERT INTO messages (tenant_id, invoice_id, step_index, channel, status, reserved_until, attempts)
+       VALUES ($1, $2, $3, $4, 'sending', now() + interval '5 minutes', 1)
+       ON CONFLICT (tenant_id, invoice_id, step_index) WHERE step_index IS NOT NULL
+       DO UPDATE SET status = 'sending',
+                     channel = EXCLUDED.channel,
+                     reserved_until = now() + interval '5 minutes',
+                     attempts = messages.attempts + 1
+        WHERE (messages.status = 'sending'
+                AND (messages.reserved_until IS NULL OR messages.reserved_until < now()))
+           OR (messages.status = 'failed'
+                AND ($5::boolean
+                     OR ((messages.reserved_until IS NULL OR messages.reserved_until < now())
+                         AND messages.attempts < $6)))
+       RETURNING attempts`,
+      [inv.tenant_id, inv.id, inv.next_step_index, channel, force, MAX_SEND_ATTEMPTS],
     );
 
-    if (reservationResult.rowCount === 0) {
-      // Another process has reserved this message
-      await claimClient.query("ROLLBACK");
-      return "noop";
+    if (claim.rows.length === 0) {
+      await claimClient.query("ROLLBACK"); // also returns the credit
+      finished = true;
+      // Already sent for this step but the sequence didn't advance (legacy
+      // data): advance now so the invoice isn't stuck on this step.
+      const existing = await servicePool.query<{ status: string }>(
+        `SELECT status FROM messages WHERE tenant_id = $1 AND invoice_id = $2 AND step_index = $3`,
+        [inv.tenant_id, inv.id, inv.next_step_index],
+      );
+      const st = existing.rows[0]?.status;
+      if (st && !["sending", "failed"].includes(st)) {
+        await advanceSequence(servicePool, inv, steps, now);
+        return "advanced";
+      }
+      return "noop"; // in flight elsewhere, or waiting for retry backoff
     }
+    const attempts = claim.rows[0].attempts;
 
-    // We have the reservation, proceed to send
     let providerMsgId: string;
     try {
       if (channel === "sms") {
@@ -220,10 +234,14 @@ async function processOne(
         ).providerMsgId;
       }
     } catch (err) {
-      // On failure, update message status and refund credit
+      const message = err instanceof Error ? err.message : String(err);
+      // Record the failure, back off before the next automatic retry, refund.
       await claimClient.query(
-        `UPDATE messages SET status = 'failed', reserved_until = NULL WHERE tenant_id = $1 AND invoice_id = $2 AND step_index = $3`,
-        [inv.tenant_id, inv.id, inv.next_step_index]
+        `UPDATE messages
+            SET status = 'failed', last_error = $4,
+                reserved_until = now() + ($5 * interval '10 minutes')
+          WHERE tenant_id = $1 AND invoice_id = $2 AND step_index = $3`,
+        [inv.tenant_id, inv.id, inv.next_step_index, message.slice(0, 1000), attempts],
       );
       await claimClient.query(
         `UPDATE credit_wallets SET balance = balance + 1, updated_at = now() WHERE tenant_id = $1`,
@@ -234,16 +252,26 @@ async function processOne(
          VALUES ($1, 1, 'dunning_send_failed', $2, 'engine', now())`,
         [inv.tenant_id, inv.id],
       );
+      await claimClient.query(
+        `INSERT INTO audit_log (tenant_id, actor, action, detail)
+         VALUES ($1, 'system', $2, $3::jsonb)`,
+        [
+          inv.tenant_id,
+          attempts >= MAX_SEND_ATTEMPTS ? "dunning_send_gave_up" : "dunning_send_failed",
+          JSON.stringify({ invoice_id: inv.id, step_index: inv.next_step_index, channel, attempts, error: message.slice(0, 300) }),
+        ],
+      );
       await claimClient.query("COMMIT");
-      throw err;
+      finished = true;
+      throw new ApiError(502, "SEND_FAILED", `Reminder not sent: ${message.slice(0, 300)}`);
     }
 
-    // On success, update message to sent and clear reservation
     await claimClient.query(
-      `UPDATE messages SET provider_msg_id = $1, status = 'sent', sent_at = now(), reserved_until = NULL WHERE tenant_id = $2 AND invoice_id = $3 AND step_index = $4`,
-      [providerMsgId, inv.tenant_id, inv.id, inv.next_step_index]
+      `UPDATE messages
+          SET provider_msg_id = $1, status = 'sent', sent_at = now(), reserved_until = NULL, last_error = NULL
+        WHERE tenant_id = $2 AND invoice_id = $3 AND step_index = $4`,
+      [providerMsgId, inv.tenant_id, inv.id, inv.next_step_index],
     );
-
     await claimClient.query(
       `INSERT INTO audit_log (tenant_id, actor, action, detail)
        VALUES ($1, 'system', 'dunning_sent', $2::jsonb)`,
@@ -258,28 +286,39 @@ async function processOne(
         }),
       ],
     );
-
-    // Advance the sequence
-    const nextIndex = inv.next_step_index + 1;
-    const nextStep = steps[nextIndex];
-    if (!nextStep) {
-      await completeSequence(inv);
-    } else {
-      const nextScheduled = scheduledFor(inv.due_date, nextStep.delayDays, now);
-      await servicePool.query(
-        `UPDATE invoices SET next_step_index = $2, next_step_due_at = $3, updated_at = now() WHERE id = $1`,
-        [inv.id, nextIndex, nextScheduled.toISOString()],
-      );
-    }
+    await advanceSequence(claimClient, inv, steps, now);
 
     await claimClient.query("COMMIT");
+    finished = true;
     return "sent";
   } catch (err) {
-    await claimClient.query("ROLLBACK");
+    if (!finished) await claimClient.query("ROLLBACK").catch(() => {});
     throw err;
   } finally {
     claimClient.release();
   }
+}
+
+async function advanceSequence(
+  db: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
+  inv: InvoiceForEngine,
+  steps: WorkflowStep[],
+  now: Date,
+): Promise<void> {
+  const nextIndex = inv.next_step_index + 1;
+  const nextStep = steps[nextIndex];
+  if (!nextStep) {
+    await db.query(
+      `UPDATE invoices SET next_step_index = 9999, next_step_due_at = NULL, updated_at = now() WHERE id = $1`,
+      [inv.id],
+    );
+    return;
+  }
+  const nextScheduled = scheduledFor(inv.due_date, nextStep.delayDays, now);
+  await db.query(
+    `UPDATE invoices SET next_step_index = $2, next_step_due_at = $3, updated_at = now() WHERE id = $1`,
+    [inv.id, nextIndex, nextScheduled.toISOString()],
+  );
 }
 
 /**

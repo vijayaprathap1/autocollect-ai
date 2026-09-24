@@ -6,6 +6,7 @@ import { config } from "../../config.js";
 import { generateToken, hashToken } from "../../lib/auth.js";
 import { passwordResetEmail } from "../../lib/email-templates.js";
 import { postmarkEnabled, sendEmail } from "../../lib/postmark.js";
+import { installDefaultSequence } from "../../lib/default-sequence.js";
 
 /**
  * Super admin console endpoints.
@@ -38,6 +39,7 @@ export async function adminRoutes(app: FastifyInstance) {
       );
       await client.query(`INSERT INTO memberships (user_id, tenant_id, role, status) VALUES ($1, $2, 'owner', 'active')`, [user.rows[0].id, tenantId]);
       await client.query(`INSERT INTO workflows (tenant_id, name, is_default, enabled, steps) VALUES ($1, 'Default sequence', TRUE, FALSE, '[]'::jsonb)`, [tenantId]);
+      await installDefaultSequence(client, tenantId);
       await client.query(`INSERT INTO credit_wallets (tenant_id, balance) VALUES ($1, 50)`, [tenantId]);
       await client.query(`INSERT INTO subscriptions (tenant_id, plan, status, credits_per_month) VALUES ($1, 'free', 'active', 50)`, [tenantId]);
       const tokenHash = hashToken(token);

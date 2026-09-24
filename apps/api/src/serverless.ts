@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { buildApp } from "./app.js";
+import { validateProductionConfig } from "./config.js";
 
 /**
  * Vercel serverless entrypoint for the Fastify API.
@@ -15,6 +16,7 @@ let app: ReturnType<typeof buildApp> | null = null;
 
 async function getApp() {
   if (!app) {
+    validateProductionConfig();
     app = buildApp();
     await app.ready();
   }
@@ -42,7 +44,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   res.statusCode = response.statusCode;
   for (const [key, value] of Object.entries(response.headers)) {
-    if (typeof value === "string" || typeof value === "number") res.setHeader(key, value);
+    // Arrays matter: the session cookie is sent as a Set-Cookie array.
+    if (value === undefined) continue;
+    res.setHeader(key, Array.isArray(value) ? value.map(String) : value);
   }
   res.end(response.payload);
 }

@@ -35,7 +35,7 @@ export async function dequeueJob(jobName: string): Promise<{
     // Use FOR UPDATE SKIP LOCKED to lock the row and skip if locked by another transaction.
     const result = await client.query(
       `SELECT id, payload FROM job_queue
-       WHERE job_name = $1 AND attempted_at IS NULL
+       WHERE job_name = $1 AND attempted_at IS NULL AND scheduled_at <= now()
        ORDER BY scheduled_at ASC
        LIMIT 1
        FOR UPDATE SKIP LOCKED`,
@@ -83,12 +83,15 @@ export async function completeJob(jobId: string): Promise<void> {
  * @param error - The error message.
  */
 export async function failJob(jobId: string, error: string): Promise<void> {
+  // Make it runnable again after a short backoff (it was left claimed before,
+  // so a failed job was never retried and sat in the table forever).
   await servicePool.query(
     `UPDATE job_queue
      SET attempts = attempts + 1,
-         last_error = $2
-     WHERE id = $1
-       AND attempts < max_attempts`,
+         last_error = $2,
+         attempted_at = NULL,
+         scheduled_at = now() + ((attempts + 1) * interval '1 minute')
+     WHERE id = $1`,
     [jobId, error]
   );
   // If the job has exhausted attempts, delete it.

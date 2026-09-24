@@ -178,6 +178,11 @@ export async function invoicesRoutes(app: FastifyInstance) {
               quantity: 1,
             },
           ],
+          // Lets the connected-account `checkout.session.completed` webhook
+          // find and close this invoice, and stops a second payment.
+          metadata: { autocollect_invoice_id: id, autocollect_tenant_id: req.user.tenantId },
+          payment_intent_data: { metadata: { autocollect_invoice_id: id } },
+          restrictions: { completed_sessions: { limit: 1 } },
         },
         { stripeAccount: account },
       );

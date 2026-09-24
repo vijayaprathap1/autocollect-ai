@@ -7,4 +7,7 @@ DEMO-CREDENTIALS.md
 *.log
 .DS_Store
 coverage/
-.GAP-ANALYSIS.md
+.GAP-ANALYSIS.mdpgdata/
+pgdata_test/
+test-results/
+*.tsbuildinfo

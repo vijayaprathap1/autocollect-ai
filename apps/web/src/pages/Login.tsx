@@ -74,12 +74,13 @@ export function Login() {
             {loading ? "Signing in…" : "Sign in"}
           </Button>
           <div className="flex items-center justify-center mt-4">
-            <Button 
+            <Button
+              type="button"
               variant="secondary"
               onClick={handleGoogleLogin}
               className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700"
             >
-              SIGN IN WITH GOOGLE (TEST VERSION)
+              Continue with Google
             </Button>
           </div>
           <div className="text-sm">

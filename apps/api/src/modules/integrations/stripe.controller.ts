@@ -9,7 +9,13 @@ import { extractCookieToken } from "../../lib/auth.js";
 import { encryptSecret } from "../../lib/crypto.js";
 import { PLAN_KEYS, setTenantPlan, type PlanKey } from "../../lib/billing.js";
 import { smsEnabled } from "../../lib/sms.js";
-import { ingestStripeInvoice, markInvoicePaid, tenantByStripeAccount } from "./ingest.service.js";
+import {
+  ingestStripeInvoice,
+  markInvoicePaid,
+  markInvoicePaidById,
+  recordPaymentFailure,
+  tenantByStripeAccount,
+} from "./ingest.service.js";
 import { claimWebhookEvent, completeWebhookEvent, failWebhookEvent } from "../../lib/webhook-events.js";
 
 const MOCK_ACCOUNT_ID = "acct_dev_mock";
@@ -38,63 +44,65 @@ async function planFromSubscription(subscriptionId: string): Promise<PlanKey | n
 }
 
 export async function stripeRoutes(app: FastifyInstance) {
-  async function syncHistoricalStripeInvoices(tenantId: string, stripeAccountId: string) {
-    if (!stripeEnabled || !stripe) return;
-    const limit = 100;
-    let hasMore = true;
+  /**
+   * Pull the connected account's open invoices (the ones worth chasing).
+   * Paid/void history is skipped so it doesn't eat the plan's invoice limit,
+   * and one bad invoice (or hitting the plan limit) doesn't abort the rest.
+   */
+  async function syncHistoricalStripeInvoices(
+    tenantId: string,
+    stripeAccountId: string,
+  ): Promise<{ imported: number; failed: number; firstError?: string }> {
+    const result: { imported: number; failed: number; firstError?: string } = { imported: 0, failed: 0 };
+    if (!stripeEnabled || !stripe) return result;
     let startingAfter: string | undefined = undefined;
-    while (hasMore) {
-      const invoices = await stripe!.invoices.list({
-        limit,
-        starting_after: startingAfter,
-        expand: ['data.customer'],
-      }, {
-        stripeAccount: stripeAccountId,
-      });
+    for (;;) {
+      const invoices: import("stripe").Stripe.ApiList<import("stripe").Stripe.Invoice> = await stripe.invoices.list(
+        { limit: 100, status: "open", starting_after: startingAfter, expand: ["data.customer"] },
+        { stripeAccount: stripeAccountId },
+      );
       for (const inv of invoices.data) {
-        let customerId: string | null = null;
-        let customerName: string | null = null;
-        let customerEmail: string | null = null;
-        // When expanding, inv.customer is either null (if the customer was deleted) or an expanded Customer object
-        if (inv.customer && typeof inv.customer !== 'string') {
-          const cust = inv.customer as { id: string; name: string | null; email: string | null };
-          customerId = cust.id;
-          customerName = cust.name;
-          customerEmail = cust.email;
-          // Note: We do not check for deleted because expansion returns null if deleted, so this block only runs for non-deleted customers.
-        } else if (typeof inv.customer === 'string') {
-          // This should not happen because we expanded, but just in case
-          customerId = inv.customer;
+        const cust = inv.customer && typeof inv.customer !== "string" && !("deleted" in inv.customer && inv.customer.deleted)
+          ? (inv.customer as { id: string; name: string | null; email: string | null })
+          : null;
+        try {
+          await ingestStripeInvoice(tenantId, {
+            id: inv.id!,
+            customer: cust?.id ?? (typeof inv.customer === "string" ? inv.customer : null),
+            customer_name: cust?.name ?? inv.customer_name ?? null,
+            customer_email: cust?.email ?? inv.customer_email ?? null,
+            amount_due: inv.amount_due,
+            currency: inv.currency,
+            created: inv.created,
+            status: inv.status ?? "open",
+            hosted_invoice_url: inv.hosted_invoice_url,
+            due_date: inv.due_date ?? null,
+            period_start: inv.period_start ?? null,
+            line_items: inv.lines?.data?.map((line) => ({
+              description: line.description ?? null,
+              quantity: line.quantity ?? 1,
+              amount: line.amount ?? 0,
+            })) ?? [],
+          });
+          result.imported += 1;
+        } catch (err) {
+          result.failed += 1;
+          result.firstError ??= err instanceof Error ? err.message : String(err);
         }
-        await ingestStripeInvoice(tenantId, {
-          id: inv.id,
-          customer: customerId,
-          customer_name: customerName,
-          customer_email: customerEmail,
-          amount_due: inv.amount_due,
-          currency: inv.currency,
-          created: Math.floor(inv.created),
-          status: inv.status ?? 'open',
-          hosted_invoice_url: inv.hosted_invoice_url,
-          due_date: inv.due_date ? Math.floor(inv.due_date) : null,
-          period_start: inv.period_start ? Math.floor(inv.period_start) : null,
-          line_items: inv.lines?.data?.map(line => ({
-            description: line.description ?? null,
-            quantity: line.quantity ?? 1,
-            amount: line.amount ?? 0,
-          })) ?? [],
-        });
       }
-      hasMore = invoices.has_more;
-      if (hasMore && invoices.data.length > 0) {
-        startingAfter = invoices.data[invoices.data.length - 1].id;
-      }
+      if (!invoices.has_more || invoices.data.length === 0) break;
+      startingAfter = invoices.data[invoices.data.length - 1].id;
     }
-    // Mark historical sync as completed
     await servicePool.query(
       `UPDATE integrations SET historical_sync_completed_at = now() WHERE tenant_id = $1 AND source = 'stripe'`,
       [tenantId],
     );
+    await servicePool.query(
+      `INSERT INTO audit_log (tenant_id, actor, action, detail)
+       VALUES ($1, 'stripe', 'stripe_historical_sync', $2::jsonb)`,
+      [tenantId, JSON.stringify(result)],
+    ).catch(() => {});
+    return result;
   }
 
   /**
@@ -151,6 +159,9 @@ export async function stripeRoutes(app: FastifyInstance) {
           scope: "read_write",
         });
       } else {
+        if (config.nodeEnv === "production") {
+          throw badRequest("Stripe is not configured (STRIPE_SECRET_KEY missing)", "STRIPE_NOT_CONFIGURED");
+        }
         // Stripe-mock mode: return a URL that resolves entirely within our app.
         url = `${config.appUrl}/integrations/stripe/callback?state=${encodeURIComponent(
           state,
@@ -205,6 +216,7 @@ export async function stripeRoutes(app: FastifyInstance) {
           connected_at: new Date().toISOString(),
         };
       } else {
+        if (config.nodeEnv === "production") throw badRequest("Stripe is not configured", "STRIPE_NOT_CONFIGURED");
         if (q.code !== "dev_stripe_code") throw badRequest("Invalid dev OAuth code");
         stripeAccountId = MOCK_ACCOUNT_ID;
         credentials = {
@@ -235,10 +247,18 @@ export async function stripeRoutes(app: FastifyInstance) {
         client.release();
       }
 
-      // Sync historical Stripe invoices for the newly connected account
-      await syncHistoricalStripeInvoices(tenantId, stripeAccountId);
+      // Import the account's open invoices. A sync problem must not turn a
+      // successful connection into an error page; it's logged to the audit log.
+      let synced = "";
+      try {
+        const r = await syncHistoricalStripeInvoices(tenantId, stripeAccountId);
+        synced = `&imported=${r.imported}${r.failed ? `&failed=${r.failed}` : ""}`;
+      } catch (err) {
+        req.log.error({ err, tenantId }, "stripe historical sync failed");
+        synced = "&sync=error";
+      }
 
-      return reply.redirect(`${config.webOrigin}/settings?stripe=connected`);
+      return reply.redirect(`${config.webOrigin}/settings?stripe=connected${synced}`);
     },
   );
 
@@ -313,7 +333,7 @@ export async function stripeRoutes(app: FastifyInstance) {
       const conn = await tenantByStripeAccount(accountId);
       if (!conn) return reply.send({ received: true, ignored: "unknown_account" });
 
-      const inv = (event.data.object as {
+      const obj = (event.data.object ?? {}) as {
         id?: string;
         status?: string;
         amount_due?: number;
@@ -326,61 +346,80 @@ export async function stripeRoutes(app: FastifyInstance) {
         due_date?: number | null;
         period_start?: number | null;
         lines?: { data?: { description?: string | null; quantity?: number | null; amount?: number }[] };
-      }) ?? {};
+        last_finalization_error?: { message?: string; code?: string } | null;
+        // checkout.session.completed
+        payment_link?: string | null;
+        payment_status?: string;
+        metadata?: Record<string, string> | null;
+      };
 
       const claimed = await claimWebhookEvent(event.id, "stripe", conn.tenantId);
       if (claimed) {
         try {
-          if (event.type === "invoice.paid" && inv.id) {
-            await markInvoicePaid(conn.tenantId, inv.id);
-          } else if (event.type === "invoice.created" || event.type === "invoice.updated") {
-            // We only have the customer ID, so we set name and email to null.
-            // They will be filled in by the historical sync later.
-            await ingestStripeInvoice(conn.tenantId, {
-              id: inv.id ?? "",
-              customer: inv.customer ?? null,
-              customer_name: null,
-              customer_email: null,
-              amount_due: inv.amount_due ?? 0,
-              currency: inv.currency ?? "usd",
-              created: inv.created ?? Math.floor(Date.now() / 1000),
-              status: inv.status ?? "open",
-              hosted_invoice_url: inv.hosted_invoice_url,
-              due_date: inv.due_date,
-              period_start: inv.period_start,
-              line_items: inv.lines?.data?.map((l) => ({
-                description: l.description,
-                quantity: l.quantity ?? 1,
-                amount: l.amount,
-              })),
-            });
-          } else if (event.type === "invoice.payment_failed") {
-            // Record payment failure and pause dunning for this invoice
-            await servicePool.query(
-              `UPDATE invoices
-                 SET status = 'paused',
-                     last_payment_failed_at = now(),
-                     last_payment_failure_reason = $3,
-                     last_payment_failure_code = $4,
-                     updated_at = now()`
-            , [
-              conn.tenantId,
-              inv.id ?? "",
-              (event.data.object as { last_payment_error?: { message?: string; code?: string } })?.last_payment_error?.message ?? "Payment failed",
-              (event.data.object as { last_payment_error?: { message?: string; code?: string } })?.last_payment_error?.code ?? "payment_failed",
-            ]);
-            await servicePool.query(
-              `INSERT INTO audit_log (tenant_id, actor, action, detail)
-               VALUES ($1, 'stripe', 'invoice_payment_failed', $2::jsonb)`,
-              [
-                conn.tenantId,
-                JSON.stringify({
-                  invoice_external_id: inv.id,
-                  failure_reason: (event.data.object as { last_payment_error?: { message?: string } })?.last_payment_error?.message ?? "Payment failed",
-                  failure_code: (event.data.object as { last_payment_error?: { code?: string } })?.last_payment_error?.code ?? "payment_failed",
-                }),
-              ],
-            );
+          switch (event.type) {
+            case "invoice.paid":
+              if (obj.id) await markInvoicePaid(conn.tenantId, obj.id);
+              break;
+
+            // Any change to an invoice's state re-syncs our copy. Stripe invoices
+            // start as drafts (skipped) and become chaseable on finalization;
+            // void / uncollectible stop the sequence (status leaves 'open').
+            case "invoice.created":
+            case "invoice.finalized":
+            case "invoice.updated":
+            case "invoice.voided":
+            case "invoice.marked_uncollectible":
+              if (obj.id) {
+                await ingestStripeInvoice(conn.tenantId, {
+                  id: obj.id,
+                  customer: obj.customer ?? null,
+                  customer_name: obj.customer_name ?? null,
+                  customer_email: obj.customer_email ?? null,
+                  amount_due: obj.amount_due ?? 0,
+                  currency: obj.currency ?? "usd",
+                  created: obj.created ?? Math.floor(Date.now() / 1000),
+                  status: obj.status ?? "open",
+                  hosted_invoice_url: obj.hosted_invoice_url,
+                  due_date: obj.due_date,
+                  period_start: obj.period_start,
+                  line_items: obj.lines?.data?.map((l) => ({
+                    description: l.description,
+                    quantity: l.quantity ?? 1,
+                    amount: l.amount,
+                  })),
+                });
+              }
+              break;
+
+            case "invoice.payment_failed": {
+              const failure = (event.data.object as {
+                last_payment_error?: { message?: string; code?: string } | null;
+              }).last_payment_error;
+              if (obj.id) {
+                await recordPaymentFailure(
+                  conn.tenantId,
+                  obj.id,
+                  failure?.message ?? "Payment failed",
+                  failure?.code ?? "payment_failed",
+                );
+              }
+              break;
+            }
+
+            // A customer paid one of our Payment Links (CSV/QBO invoices).
+            case "checkout.session.completed": {
+              if (obj.payment_status !== "paid" || !obj.payment_link) break;
+              let invoiceId = obj.metadata?.autocollect_invoice_id;
+              if (!invoiceId && stripe) {
+                const link = await stripe.paymentLinks.retrieve(obj.payment_link, {}, { stripeAccount: accountId });
+                invoiceId = link.metadata?.autocollect_invoice_id;
+              }
+              if (invoiceId) await markInvoicePaidById(conn.tenantId, invoiceId);
+              break;
+            }
+
+            default:
+              break;
           }
           await completeWebhookEvent(event.id);
         } catch (err) {
@@ -432,7 +471,9 @@ export async function stripeRoutes(app: FastifyInstance) {
     "/integrations/stripe/dev-event",
     { config: { public: true } },
     async (req, reply) => {
-      if (stripeEnabled) throw notFound("Dev-event endpoint disabled (real Stripe keys set)");
+      if (stripeEnabled || config.nodeEnv === "production") {
+        throw notFound("Dev-event endpoint disabled (real Stripe keys set or production)");
+      }
       const body = (req.body ?? {}) as {
         type?: string;
         account?: string;
@@ -463,30 +504,11 @@ export async function stripeRoutes(app: FastifyInstance) {
       }
 
       if (type === "invoice.payment_failed") {
-        await servicePool.query(
-          `UPDATE invoices
-             SET status = 'paused',
-                 last_payment_failed_at = now(),
-                 last_payment_failure_reason = $3,
-                 last_payment_failure_code = $4,
-                 updated_at = now()`
-        , [
+        await recordPaymentFailure(
           conn.tenantId,
           id,
           inv.failure_reason ?? "Payment failed",
           inv.failure_code ?? "payment_failed",
-        ]);
-        await servicePool.query(
-          `INSERT INTO audit_log (tenant_id, actor, action, detail)
-           VALUES ($1, 'stripe', 'invoice_payment_failed', $2::jsonb)`,
-          [
-            conn.tenantId,
-            JSON.stringify({
-              invoice_external_id: id,
-              failure_reason: inv.failure_reason ?? "Payment failed",
-              failure_code: inv.failure_code ?? "payment_failed",
-            }),
-          ],
         );
         return reply.send({ received: true, action: "payment_failed", invoice: id });
       }

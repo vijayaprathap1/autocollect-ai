@@ -152,7 +152,7 @@ export async function googleAuthRoutes(app: FastifyInstance) {
 
       // Redirect to frontend
       const redirectUrl = isNewUser 
-        ? `${config.webOrigin}/onboarding?welcome=true`
+        ? `${config.webOrigin}/dashboard?welcome=true`
         : `${config.webOrigin}/dashboard`;
       
       return reply.redirect(redirectUrl);

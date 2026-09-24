@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { requireRole } from "../../plugins/tenant.js";
 import { badRequest, notFound } from "../../lib/errors.js";
 import { draftReminderTemplates } from "../../lib/ai.js";
+import { linkDefaultWorkflowSteps } from "../../lib/default-sequence.js";
 import type { TenantTone, WorkflowStep } from "@autocollect/shared";
 
 function validSteps(value: unknown): value is WorkflowStep[] {
@@ -131,6 +132,9 @@ export async function workflowRoutes(app: FastifyInstance) {
         [req.user.tenantId, d.stepKey, d.subject, d.body],
       );
     }
+
+    // If the default workflow has no steps yet, link it to these templates.
+    await linkDefaultWorkflowSteps(req.db, req.user.tenantId);
 
     await req.db.query(
       `INSERT INTO audit_log (tenant_id, actor, action, detail)

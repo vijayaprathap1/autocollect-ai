@@ -4,7 +4,7 @@ test.describe("public authentication flow", () => {
   test("signup route is visible to unauthenticated users", async ({ page }) => {
     await page.goto("/signup");
 
-    await expect(page).toHaveURL(/\\/signup$/);
+    await expect(page).toHaveURL(/\/signup$/);
     await expect(page.getByText("Create your workspace", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Create account" })).toBeVisible();
     await expect(page.getByPlaceholder("jane@company.com")).toBeVisible();
@@ -14,7 +14,7 @@ test.describe("public authentication flow", () => {
     await page.goto("/login");
     await page.getByRole("link", { name: "Start your free trial" }).click();
 
-    await expect(page).toHaveURL(/\\/signup$/);
+    await expect(page).toHaveURL(/\/signup$/);
     await expect(page.getByText("Create your workspace", { exact: true })).toBeVisible();
   });
 
@@ -64,46 +64,25 @@ test.describe("public authentication flow", () => {
     await expect(page.getByRole("link", { name: /Sign in/ })).toBeVisible();
   });
 
-  test("Google OAuth login flow", async ({ page }) => {
-    // Mock the Google OAuth callback with a redirect to dashboard
-    await page.route("/**/auth/google/callback", async (route) => {
-      await route.fulfill({
-        status: 302,
-        headers: {
-          Location: "/dashboard",
-        },
-        contentType: "text/html",
-        body: "",
-      });
+  test("Google button starts the OAuth flow at the API", async ({ page }) => {
+    // Google itself can't be reached from a test; assert we hand off to the
+    // API's /auth/google route (which redirects to Google) and don't submit
+    // the password form.
+    let started = "";
+    await page.route("**/api/auth/google", async (route) => {
+      started = route.request().url();
+      await route.fulfill({ status: 200, contentType: "text/html", body: "<h1>google-oauth-started</h1>" });
     });
-
-    // Mock the API endpoint that returns user session after OAuth
-    await page.route("/**/api/auth/me", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          ok: true,
-          userId: "user_123",
-          tenantId: "tenant_123",
-          role: "member",
-          tenantSlug: "test-org",
-          isSuperAdmin: false,
-          sessionType: "tenant",
-        }),
-      });
+    let loginPosted = false;
+    page.on("request", (r) => {
+      if (r.url().endsWith("/api/auth/login")) loginPosted = true;
     });
 
     await page.goto("/login");
+    await page.getByRole("button", { name: "Continue with Google" }).click();
 
-    // Click the "Sign in with Google" button
-    await page.getByRole("button", { name: "SIGN IN WITH GOOGLE (TEST VERSION)" }).click();
-
-    // Wait for navigation to dashboard (after OAuth callback)
-    await page.waitForURL("/dashboard", { waitUntil: "domcontentloaded" });
-
-    // Verify the user is on the dashboard
-    await expect(page.getByText("Dashboard", { exact: true })).toBeVisible();
-    await expect(page.getByText("Invoices")).toBeVisible();
+    await expect(page.getByText("google-oauth-started")).toBeVisible();
+    expect(started).toMatch(/\/api\/auth\/google$/);
+    expect(loginPosted).toBe(false);
   });
 });

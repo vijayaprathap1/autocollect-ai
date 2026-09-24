@@ -19,7 +19,7 @@ const FILTERS: { value: Filter; label: string }[] = [
 
 export function Invoices() {
   const me = useMe();
-  const { dialogState, open, close, setLoading, ConfirmDialog } = useConfirmDialog();
+  const { open, close, setLoading, ConfirmDialog } = useConfirmDialog();
   const [filter, setFilter] = useState<Filter>("all");
   const [source, setSource] = useState<string>("all");
   const [q, setQ] = useState("");
@@ -224,7 +224,7 @@ export function Invoices() {
           <Pagination page={page} hasMore={data?.hasMore ?? false} onPageChange={setPage} disabled={isFetching} />
         </Card>
       )}
-    </div>
+  
       {ConfirmDialog()}
     </div>
   );

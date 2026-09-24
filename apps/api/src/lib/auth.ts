@@ -5,6 +5,7 @@ import { query, servicePool, setTenantForRequest } from "./db.js";
 import { config } from "../config.js";
 import { unauthorized, badRequest } from "./errors.js";
 import type { UserRole } from "@autocollect/shared";
+import { installDefaultSequence } from "./default-sequence.js";
 
 export type AuthUser = {
   userId: string;
@@ -152,6 +153,10 @@ export async function provisionUserAndTenant(
      VALUES ($1, 'Default sequence', TRUE, FALSE, '[]'::jsonb)`,
     [tenantId],
   );
+
+  // Default reminder templates (unapproved) + link them into the workflow,
+  // so a new workspace can send as soon as the owner approves the templates.
+  await installDefaultSequence(client, tenantId);
 
   // Create credit wallet
   await client.query(

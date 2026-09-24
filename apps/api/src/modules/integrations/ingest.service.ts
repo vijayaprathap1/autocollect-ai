@@ -86,7 +86,14 @@ export async function ingestStripeInvoice(
                      currency = EXCLUDED.currency,
                      issue_date = EXCLUDED.issue_date,
                      due_date = EXCLUDED.due_date,
-                     status = EXCLUDED.status,
+                     -- Stripe webhooks can arrive out of order: a late "open"
+                     -- must not reopen a paid invoice or un-pause one an admin
+                     -- (or a bounce) paused.
+                     status = CASE
+                       WHEN EXCLUDED.status = 'open' AND invoices.status IN ('paid', 'paused')
+                         THEN invoices.status
+                       ELSE EXCLUDED.status
+                     END,
                      payment_link = EXCLUDED.payment_link,
                      line_items = EXCLUDED.line_items,
                      updated_at = now()`,
@@ -122,6 +129,48 @@ export async function markInvoicePaid(tenantId: string, invoiceExternalId: strin
         SET status = 'paid', next_step_index = 9999, next_step_due_at = NULL, updated_at = now()
       WHERE tenant_id = $1 AND source = 'stripe' AND external_id = $2`,
     [tenantId, invoiceExternalId],
+  );
+}
+
+/** Mark one of our invoices paid by its internal id (Payment Link payments). */
+export async function markInvoicePaidById(tenantId: string, invoiceId: string): Promise<void> {
+  await servicePool.query(
+    `UPDATE invoices
+        SET status = 'paid', next_step_index = 9999, next_step_due_at = NULL, updated_at = now()
+      WHERE tenant_id = $1 AND id::text = $2`,
+    [tenantId, invoiceId],
+  );
+  await servicePool.query(
+    `INSERT INTO audit_log (tenant_id, actor, action, detail)
+     VALUES ($1, 'stripe', 'invoice_paid_via_payment_link', $2::jsonb)`,
+    [tenantId, JSON.stringify({ invoice_id: invoiceId })],
+  );
+}
+
+/**
+ * `invoice.payment_failed`: record why on that one invoice. The invoice stays
+ * open so reminders continue (the customer still owes and Stripe keeps
+ * retrying the charge); admins see the reason on the invoice.
+ */
+export async function recordPaymentFailure(
+  tenantId: string,
+  invoiceExternalId: string,
+  reason: string,
+  code: string,
+): Promise<void> {
+  await servicePool.query(
+    `UPDATE invoices
+        SET last_payment_failed_at = now(),
+            last_payment_failure_reason = $3,
+            last_payment_failure_code = $4,
+            updated_at = now()
+      WHERE tenant_id = $1 AND source = 'stripe' AND external_id = $2`,
+    [tenantId, invoiceExternalId, reason, code],
+  );
+  await servicePool.query(
+    `INSERT INTO audit_log (tenant_id, actor, action, detail)
+     VALUES ($1, 'stripe', 'invoice_payment_failed', $2::jsonb)`,
+    [tenantId, JSON.stringify({ invoice_external_id: invoiceExternalId, failure_reason: reason, failure_code: code })],
   );
 }
 
