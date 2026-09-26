@@ -1,94 +1,89 @@
-# Auto Collect AI
+# AutoCollect AI
 
-Invoice automation and accounts receivable platform for SMBs.
+**Automated B2B invoice chasing (dunning) for small businesses.** AutoCollect pulls in unpaid invoices, runs multi-step reminder workflows by email and SMS, triages customer replies, and shows what's overdue on one dashboard, so finance teams stop chasing payments by hand.
 
-## 🎯 What It Does
+> Status: working MVP, built solo end-to-end. Runs fully locally with seeded demo data.
 
-Automates tracking of overdue invoices, payment recovery workflows, and accounts receivable management through real-time dashboards and AI-powered reminders.
+---
 
-## 📊 Impact
+## Why I built it
 
-- **40% faster** payment recovery
-- **50% reduction** in AR analysis time  
-- **90%+ mobile traffic** with sub-2s load times
-- **$120K+ annual revenue** impact when integrated
+Tools in this space (Chaser, YayPay, Invoiced) start at roughly $259–$500/month and cap users or workflows. AutoCollect is designed around **unlimited users and credit-based pricing** (1 credit per email, 2 per SMS), so a small team pays for what it sends, not for seats.
 
-## 🛠️ Tech Stack
+## What it does
 
-### Frontend
-- **React** - UI components and state management
-- **Next.js 14+** - App Router, Server-Side Rendering
-- **TypeScript** - Type-safe code
-- **Tailwind CSS** - Responsive styling
-- **Real-time streaming** - Server-Sent Events (SSE) for live dashboards
+- **Invoice ingestion:** Stripe, QuickBooks Online sync, and CSV import feed one shared ingest pipeline
+- **Dunning workflows:** configurable multi-step reminder sequences with templates, run on a scheduler (cron module)
+- **Reply inbox:** inbound customer replies are captured and triaged alongside each invoice
+- **Dashboard:** overdue totals, invoice and customer views, and an activity feed
+- **Teams and roles:** organizations with owner / admin / member roles and email invitations
+- **Credits and billing:** per-tenant credit wallet with an append-only transaction ledger; plan allowances granted from Stripe webhooks; sends pause automatically when credits run out
+- **Super-admin console:** platform KPIs, org and user management, credit grants, suspensions, and an audit feed
 
-### Backend
-- **Node.js** - Server runtime
-- **GraphQL** - API layer  
-- **PostgreSQL** - Relational database
-- **Redis** - Caching for performance
+## Architecture
 
-### Third-Party Integrations
-- **Stripe API** - Payment processing
-- **OAuth 2.0** - Secure authentication
-- **ERP Connectors** - Sync invoice data
-- **Webhooks** - Real-time event processing
+npm-workspaces monorepo:
 
-## ✨ Key Features
-- 📈 Real-time invoice tracking dashboard
-- 🔔 Automated payment reminders (SMS, WhatsApp, Email)
-- 🏢 Multi-tenant architecture
-- 💳 Stripe payment gateway integration
-- 🔐 OAuth 2.0 authentication
-- 📱 Mobile-responsive UI (90%+ mobile optimized)
-- 🚀 Sub-100ms API latency
-- 📊 Analytics & reporting
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Node.js 18+
-- PostgreSQL 13+
-- Stripe API keys
-
-### Installation
-```bash
-# Clone repository
-git clone https://github.com/vijayaprathap1/auto-collect-ai.git
-cd auto-collect-ai
-
-# Install dependencies
-npm install
-
-# Set up environment
-cp .env.example .env.local
-
-# Run database migrations
-npm run migrate
-
-# Start development server
-npm run dev
+```
+apps/
+  api/        Fastify 5 + TypeScript REST API (also exported as a serverless handler)
+    src/modules/   auth, invoices, customers, workflows, replies, integrations,
+                   billing, cron, dashboard, members, admin, activity, settings
+    src/migrations SQL migrations
+  web/        React 19 + Vite SPA
+packages/
+  shared/     Types and Zod schemas shared by API and web
+e2e/          Playwright end-to-end tests
+docs/         Product requirements and product analysis
 ```
 
-## 📈 Performance
-- **LCP (Largest Contentful Paint):** < 1s
-- **API Response Time:** < 100ms  
-- **Database Query:** < 50ms (optimized)
-- **Mobile Lighthouse Score:** 92+
+### Engineering decisions worth noting
 
-## 🔒 Security
-- OAuth 2.0 authentication
-- JWT token-based sessions
-- HTTPS encryption
-- SQL injection prevention
-- CORS configuration
-- Environment variable protection
+- **Multi-tenancy with PostgreSQL row-level security (RLS).** Tenant isolation is enforced in the database, not only in application code. Admin operations use a separate pool with `BYPASSRLS`.
+- **Self-hosted auth.** argon2id password hashing and DB-backed sessions in `HttpOnly`/`SameSite=Lax` cookies. Verification, reset, and invite tokens are random, hashed at rest, and single-use.
+- **Credits in the same transaction as the send.** The wallet debit happens in the same DB transaction as the message insert, so a send can never happen without being paid for.
+- **Hardening:** rate limiting on auth routes, Helmet security headers, CORS, Zod validation on every input, and an audit log for auth, admin, and credit events.
+- **Stripe webhooks** verified against the raw request body.
 
-## 👨‍💻 Author
-**Vijaya Prathap** - Full-Stack Engineer & Founder
-- 🌐 [LinkedIn](https://linkedin.com/in/vjprathap)
-- 💼 [GitHub](https://github.com/vijayaprathap1)
-- 📧 [Email](mailto:pvijayaprathap1@gmail.com)
+## Tech stack
 
-## 🙏 Acknowledgments
-Built as a real-world FinTech solution addressing SMB pain points in payment recovery and accounts receivable management.
+| Layer | Tools |
+|---|---|
+| Frontend | React 19, TypeScript, Vite, TanStack Query, React Router, Tailwind CSS |
+| Backend | Node.js 20, Fastify 5, TypeScript, Zod, `pg` (raw SQL, no ORM) |
+| Data | PostgreSQL with row-level security |
+| Auth | argon2id, DB sessions, `jose` |
+| Integrations | Stripe, QuickBooks Online, CSV |
+| Testing | Playwright (e2e), `tsc` type checks across all workspaces |
+
+## Running locally
+
+Requires Node.js 20+ and PostgreSQL.
+
+```bash
+git clone https://github.com/vijayaprathap1/autocollect-ai.git
+cd autocollect-ai
+npm install
+
+# create a .env with DATABASE_URL and the other values read in apps/api/src/config.ts
+
+npm run db:migrate      # apply SQL migrations
+npm run db:roles        # create the Postgres roles used for RLS
+npm run db:seed         # seed a demo org and user
+
+npm run dev             # starts API and web together
+```
+
+Other scripts: `npm run typecheck`, `npm run build`, `npm run test:e2e`.
+
+## Roadmap
+
+- Transactional email provider in production (currently mocked locally)
+- AI-drafted reminder emails and reply classification
+- Cash-flow forecasting from payment history
+- Multi-org switching
+
+## Author
+
+**Vijayaprathap P**, Senior Full-Stack Engineer
+[LinkedIn](https://linkedin.com/in/vjprathap) · [GitHub](https://github.com/vijayaprathap1) · [Email](mailto:pvijayaprathap1@gmail.com)
