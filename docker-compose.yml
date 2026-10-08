@@ -1,5 +1,7 @@
-# PostgreSQL for AutoCollect AI local development
-# Dedicated instance to avoid conflicts with any local postgres. Port 5433.
+# Local development database (Postgres 17 on port 5433, same major version as CI).
+#
+#   docker compose up -d                 # database only (use `npm run dev` for the app)
+#   docker compose --profile app up -d   # database + the production image on http://localhost:4000
 services:
   postgres:
     image: postgres:17-alpine
@@ -17,6 +19,22 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # Runs the production image locally in development mode (mocks enabled).
+  app:
+    profiles: ["app"]
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://autocollect:autocollect_dev@postgres:5432/autocollect
+      WEB_ORIGIN: http://localhost:4000
+      APP_URL: http://localhost:4000/api
+    ports:
+      - "4000:4000"
+    command: ["sh", "-c", "node dist/scripts/migrate.js && node dist/server.js"]
 
 volumes:
   autocollect_pgdata:

@@ -1,8 +1,8 @@
 {
   "name": "autocollect-ai",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
-  "description": "Automated B2B invoice chaser (AutoCollect AI) - MVP monorepo",
+  "description": "Automated B2B invoice collection (AutoCollect AI) — monorepo",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -10,17 +10,21 @@
   "scripts": {
     "dev": "concurrently -n api,web -c blue,green \"npm run dev -w @autocollect/api\" \"npm run dev -w @autocollect/web\"",
     "build": "npm run build -w @autocollect/shared && npm run build -w @autocollect/api && npm run build -w @autocollect/web",
-    "typecheck": "npm run typecheck -w @autocollect/shared && npm run typecheck -w @autocollect/api && npm run typecheck -w @autocollect/web",
+    "build:vercel": "node scripts/vercel-build.mjs",
+    "start": "npm run start -w @autocollect/api",
+    "typecheck": "npm run build -w @autocollect/shared && npm run typecheck -w @autocollect/api && npm run typecheck -w @autocollect/web",
+    "test": "npm run build -w @autocollect/shared && npm run test -w @autocollect/api",
+    "test:e2e": "playwright test",
+    "smoke": "bash scripts/e2e-flow.sh",
     "db:migrate": "npm run db:migrate -w @autocollect/api",
     "db:roles": "npm run db:roles -w @autocollect/api",
-    "db:seed": "npm run db:seed -w @autocollect/api",
-    "test:e2e": "playwright test"
+    "db:seed": "npm run db:seed -w @autocollect/api"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "concurrently": "^9.1.0"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.11"
   }
 }

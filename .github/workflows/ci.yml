@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: autocollect
           POSTGRES_PASSWORD: autocollect_dev
@@ -39,8 +39,19 @@ jobs:
           npm run db:migrate
           npm run db:roles
 
+      - name: Audit runtime dependencies
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Typecheck
         run: npm run typecheck
+
+      # Runs as the least-privilege roles so Row-Level Security is really enforced.
+      - name: Unit + integration tests
+        run: npm test
+        env:
+          DATABASE_URL: postgres://autocollect_app:autocollect_app_dev@localhost:5433/autocollect
+          SERVICE_DATABASE_URL: postgres://autocollect_service:autocollect_service_dev@localhost:5433/autocollect
+          MIGRATION_DATABASE_URL: postgres://autocollect:autocollect_dev@localhost:5433/autocollect
 
       - name: Build
         run: npm run build
@@ -58,3 +69,10 @@ jobs:
           name: playwright-report
           path: test-results/
           retention-days: 7
+
+  docker-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production image
+        run: docker build -t autocollect-ai --build-arg APP_VERSION=${{ github.sha }} .

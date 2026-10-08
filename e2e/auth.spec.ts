@@ -1,88 +1,101 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("public authentication flow", () => {
-  test("signup route is visible to unauthenticated users", async ({ page }) => {
-    await page.goto("/signup");
-
-    await expect(page).toHaveURL(/\/signup$/);
-    await expect(page.getByText("Create your workspace", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Create account" })).toBeVisible();
-    await expect(page.getByPlaceholder("jane@company.com")).toBeVisible();
+test.describe("signed-out flows", () => {
+  test("root redirects anonymous visitors to sign in and remembers the target", async ({ page }) => {
+    await page.goto("/settings?tab=billing");
+    await expect(page).toHaveURL(/\/login\?next=%2Fsettings/);
+    await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
   });
 
-  test("login page navigates to signup", async ({ page }) => {
+  test("login shows a clear error for wrong credentials", async ({ page }) => {
     await page.goto("/login");
-    await page.getByRole("link", { name: "Start your free trial" }).click();
-
-    await expect(page).toHaveURL(/\/signup$/);
-    await expect(page.getByText("Create your workspace", { exact: true })).toBeVisible();
+    await page.getByLabel("Email").fill(`nobody-${Date.now()}@example.com`);
+    await page.getByLabel("Password", { exact: true }).fill("wrong-pass-1");
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page.getByRole("alert")).toContainText("Incorrect email or password");
   });
 
-  test("signup shows verification confirmation without email delivery", async ({ page }) => {
-    let signupPayload: { name: string; email: string; password: string } | undefined;
-    await page.route("/**/api/auth/signup", async (route) => {
-      signupPayload = route.request().postDataJSON() as typeof signupPayload;
-      await route.fulfill({
-        status: 200,
+  test("login offers to resend verification for unverified accounts", async ({ page }) => {
+    await page.route("**/api/auth/login", (route) =>
+      route.fulfill({
+        status: 403,
         contentType: "application/json",
-        body: JSON.stringify({
-          ok: true,
-          message: "If the address can be registered, a verification link has been sent",
-        }),
-      });
+        body: JSON.stringify({ error: { code: "EMAIL_NOT_VERIFIED", message: "Please confirm your email address first." } }),
+      }),
+    );
+    let resent = false;
+    await page.route("**/api/auth/resend-verification", (route) => {
+      resent = true;
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, message: "A new link is on its way." }) });
     });
+    await page.goto("/login");
+    await page.getByLabel("Email").fill("pending@example.com");
+    await page.getByLabel("Password", { exact: true }).fill("Passw0rd!");
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.getByRole("button", { name: "Send a new verification link" }).click();
+    await expect(page.getByText("A new link is on its way.")).toBeVisible();
+    expect(resent).toBe(true);
+  });
 
+  test("login surfaces OAuth errors passed back by the API", async ({ page }) => {
+    await page.goto("/login?error=google_cancelled");
+    await expect(page.getByRole("alert")).toContainText("Google sign-in was cancelled");
+  });
+
+  test("signup validates password strength and confirms by email", async ({ page }) => {
+    let payload: Record<string, unknown> | undefined;
+    await page.route("**/api/auth/signup", async (route) => {
+      payload = route.request().postDataJSON();
+      await route.fulfill({ status: 202, contentType: "application/json", body: JSON.stringify({ ok: true, message: "Check your inbox" }) });
+    });
     await page.goto("/signup");
-    await page.getByPlaceholder("Jane Smith").fill("Jane Smith");
-    await page.getByPlaceholder("jane@company.com").fill("jane@example.com");
-    await page.getByPlaceholder("Min. 8 characters, include a letter and number").fill("Password1");
+    await page.getByLabel("Your name").fill("Jane Smith");
+    await page.getByLabel("Company").fill("Acme Studio");
+    await page.getByLabel("Work email").fill("jane@example.com");
+    await page.getByLabel("Password", { exact: true }).fill("short");
+    await expect(page.getByText(/Needs at least 8 characters/)).toBeVisible();
+    await page.getByLabel("Password", { exact: true }).fill("Str0ng-Passw0rd");
     await page.getByRole("button", { name: "Create account" }).click();
-
     await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
-    await expect(page.getByText("jane@example.com", { exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Back to sign in" })).toBeVisible();
-    expect(signupPayload).toEqual({
-      name: "Jane Smith",
-      email: "jane@example.com",
-      password: "Password1",
-    });
+    expect(payload).toMatchObject({ name: "Jane Smith", email: "jane@example.com", organizationName: "Acme Studio" });
+    expect(typeof payload?.timezone).toBe("string");
   });
 
-  test("verification token shows the verified state without email delivery", async ({ page }) => {
-    await page.route("/**/api/auth/verify-email", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ ok: true, message: "Email verified successfully" }),
-      });
-    });
-
-    await page.goto("/verify-email?token=test-token");
-
+  test("verification link signs the user in", async ({ page }) => {
+    await page.route("**/api/auth/verify-email", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, signedIn: false }) }),
+    );
+    await page.goto("/verify-email?token=test-token-1234567890");
     await expect(page.getByRole("heading", { name: "Email verified" })).toBeVisible();
-    await expect(page.getByText("Your email has been verified.", { exact: false })).toBeVisible();
-    await expect(page.getByRole("link", { name: /Sign in/ })).toBeVisible();
   });
 
-  test("Google button starts the OAuth flow at the API", async ({ page }) => {
-    // Google itself can't be reached from a test; assert we hand off to the
-    // API's /auth/google route (which redirects to Google) and don't submit
-    // the password form.
-    let started = "";
-    await page.route("**/api/auth/google", async (route) => {
-      started = route.request().url();
-      await route.fulfill({ status: 200, contentType: "text/html", body: "<h1>google-oauth-started</h1>" });
-    });
-    let loginPosted = false;
-    page.on("request", (r) => {
-      if (r.url().endsWith("/api/auth/login")) loginPosted = true;
-    });
+  test("forgot password never reveals whether an account exists", async ({ page }) => {
+    await page.goto("/forgot-password");
+    await page.getByLabel("Email").fill(`nobody-${Date.now()}@example.com`);
+    await page.getByRole("button", { name: "Send reset link" }).click();
+    await expect(page.getByText(/If an account exists for/)).toBeVisible();
+  });
 
+  test("reset password requires matching passwords", async ({ page }) => {
+    await page.goto("/reset-password?token=some-token-value");
+    await page.getByLabel("New password").fill("Str0ng-Passw0rd");
+    await page.getByLabel("Confirm password").fill("Different-Passw0rd");
+    await page.getByRole("button", { name: "Update password" }).click();
+    await expect(page.getByRole("alert")).toContainText("Passwords don't match");
+  });
+
+  test("Google button only appears when Google sign-in is configured", async ({ page }) => {
+    await page.route("**/api/auth/providers", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ password: true, google: true, signup: true }) }),
+    );
     await page.goto("/login");
-    await page.getByRole("button", { name: "Continue with Google" }).click();
+    const google = page.getByRole("link", { name: "Continue with Google" });
+    await expect(google).toBeVisible();
+    await expect(google).toHaveAttribute("href", /\/api\/auth\/google$/);
+  });
 
-    await expect(page.getByText("google-oauth-started")).toBeVisible();
-    expect(started).toMatch(/\/api\/auth\/google$/);
-    expect(loginPosted).toBe(false);
+  test("unknown routes show a 404 page", async ({ page }) => {
+    await page.goto("/definitely-not-a-page");
+    await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
   });
 });

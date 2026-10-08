@@ -4,7 +4,7 @@ import { servicePool } from "./db.js";
 const holderId = `${process.pid}-${randomUUID()}`;
 const leaseSeconds = 120;
 
-export async function acquireJobLease(jobName: string): Promise<boolean> {
+export async function acquireJobLease(jobName: string, seconds = leaseSeconds): Promise<boolean> {
   const result = await servicePool.query(
     `INSERT INTO job_leases (job_name, holder_id, expires_at)
      VALUES ($1, $2, now() + ($3 * interval '1 second'))
@@ -14,7 +14,7 @@ export async function acquireJobLease(jobName: string): Promise<boolean> {
            updated_at = now()
      WHERE job_leases.expires_at <= now()
      RETURNING job_name`,
-    [jobName, holderId, leaseSeconds],
+    [jobName, holderId, seconds],
   );
   return result.rows.length > 0;
 }

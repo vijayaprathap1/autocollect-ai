@@ -180,4 +180,3 @@ export function Pagination({
 
 export { ToastProvider, useToast, type ToastVariant } from "./Toast";
 export { OnboardingModal, shouldShowOnboarding } from "./OnboardingModal";
-export { ConfirmDialog, useConfirmDialog } from "./ConfirmDialog";

@@ -23,8 +23,8 @@ const STEPS: OnboardingStep[] = [
     href: "/settings",
     action: (
       <div className="space-y-3">
-        <Button onClick={() => window.location.href = "/settings#integrations"}>Go to Integrations</Button>
-        <p className="text-sm text-muted">Or upload a CSV from the Invoices page</p>
+        <a href="/settings?tab=integrations"><Button>Go to Integrations</Button></a>
+        <p className="text-sm text-muted">Or upload a CSV from Settings → Integrations</p>
       </div>
     ),
   },
@@ -34,7 +34,7 @@ const STEPS: OnboardingStep[] = [
     description: "Review and approve the default email templates for your dunning sequence.",
     checkComplete: (me) => Boolean(me.tenant && !me.tenant.hasUnapprovedTemplates && me.templates.approvedTemplates > 0),
     href: "/templates",
-    action: <Button onClick={() => window.location.href = "/templates"}>Review Templates</Button>,
+    action: <a href="/templates"><Button>Review Templates</Button></a>,
   },
   {
     id: "workflow",
@@ -42,7 +42,7 @@ const STEPS: OnboardingStep[] = [
     description: "Turn on the automated sequence so reminders send on schedule.",
     checkComplete: (me) => Boolean(me.tenant?.workflowEnabled),
     href: "/workflows",
-    action: <Button onClick={() => window.location.href = "/workflows"}>Open Workflows</Button>,
+    action: <a href="/workflows"><Button>Open Workflows</Button></a>,
   },
   {
     id: "demo",

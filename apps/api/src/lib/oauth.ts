@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { config } from "../config.js";
+import { config, isProduction } from "../config.js";
 import { badRequest } from "./errors.js";
 import { servicePool } from "./db.js";
 import { generateToken, hashToken } from "./auth.js";
@@ -9,7 +9,7 @@ const STATE_TTL_MS = 15 * 60 * 1000;
 const FALLBACK_SECRET = "dev-state-secret";
 
 function secret(): string {
-  if (!config.stateSecret && config.nodeEnv === "production") {
+  if (!config.stateSecret && isProduction) {
     throw new Error("OAUTH_STATE_SECRET must be set in production");
   }
   return config.stateSecret || FALLBACK_SECRET;
@@ -83,8 +83,10 @@ export function googleAuthorizeUrl(state: string): string {
     scope: GOOGLE_SCOPE,
     redirect_uri: googleRedirectUri(),
     state,
-    access_type: "offline",
-    prompt: "consent",
+    // Sign-in only: no offline access / refresh token, and let returning
+    // users pick an account instead of re-consenting every time.
+    prompt: "select_account",
+    include_granted_scopes: "true",
   });
   return `${GOOGLE_AUTH_URL}?${params.toString()}`;
 }

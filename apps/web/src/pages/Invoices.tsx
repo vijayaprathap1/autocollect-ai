@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Badge, Button, Card, EmptyState, Input, PageHeader, Pagination, Spinner, useToast, useConfirmDialog } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, PageHeader, Pagination, Spinner, useToast } from "@/components/ui";
+import { useConfirmDialog } from "@/components/ConfirmDialog";
 import { getInvoices, invoiceAction, type InvoiceDto } from "@/lib/api";
 import { daysUntil, formatDate, formatMoney } from "@/lib/format";
 import { useMe } from "@/lib/me";

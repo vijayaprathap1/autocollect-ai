@@ -1,125 +1,100 @@
 # AutoCollect AI
 
-Automated B2B invoice chasing for freelancers, agencies, and small businesses.
-Connect Stripe (or upload a CSV), approve the reminder templates once, and
-AutoCollect sends polite, escalating email reminders with a one-click payment
-link until the invoice is paid.
+Automated B2B invoice collection for freelancers, agencies and small businesses.
+Connect Stripe or QuickBooks (or upload a CSV), approve your reminder templates
+once, and AutoCollect sends polite, escalating reminders — at your customers'
+business hours, with a one-click payment link — until the invoice is paid.
+Customer replies are read by AI: disputes pause reminders, promises to pay
+snooze them, and your team is notified.
 
-## Layout
+## Stack
 
-```
-apps/web         React SPA (Vite, port 5175)
-apps/api         Fastify API + SQL migrations + seed (port 4000)
-packages/shared  shared domain types
-e2e/             Playwright UI tests
-scripts/         end-to-end API flow tests
-```
+| | |
+|---|---|
+| `apps/api` | Fastify 5 · TypeScript · PostgreSQL (Row-Level Security) · Stripe Connect + Billing · Postmark · Twilio · QuickBooks · Anthropic |
+| `apps/web` | React 19 · Vite 6 · TanStack Query · Tailwind |
+| `packages/shared` | Shared domain types |
+| `e2e/` | Playwright browser tests |
+| `docs/` | `PRODUCTION.md` (deploy & operate), `PRODUCTION-READINESS-REVIEW.md` (audit & roadmap) |
 
-## Local development
+## Quick start (local)
 
-Prereqs: Node 20+, Docker (for Postgres on port 5433).
+Requires Node 20.11+ and Docker (for Postgres on port 5433).
 
 ```bash
-docker compose up -d                          # 1. Postgres
-npm install                                   # 2. deps
-copy apps\api\.env.example apps\api\.env      # 3. config (cp on macOS/Linux)
+docker compose up -d                          # 1. Postgres 17
+npm install                                   # 2. dependencies
+copy apps\api\.env.example apps\api\.env      # 3. config   (macOS/Linux: cp)
 npm run db:migrate                            # 4. schema
 npm run db:seed                               #    demo workspace
 npm run dev                                   # 5. API :4000 + web :5175
 ```
 
-Open http://localhost:5175 and sign in with `dev-user@autocollect.local` /
-`dev-password-auto`. Every external service (Stripe, Postmark, Anthropic, QBO,
-Twilio) falls back to a local mock when its keys are empty, so the whole flow
-works offline.
+Open http://localhost:5175 and sign in as `dev-user@autocollect.local` / `dev-password-auto`
+(platform admin: http://localhost:5175/admin/login, `admin@autocollect.local` / `admin123`).
 
-To see a reminder go out: Templates → approve all → Workflows → enable →
-Settings → Connect Stripe (mock) → open an invoice → **Send now**.
+Every external service falls back to a local mock when its keys are empty.
+Emails (verification links, invites, reminders) are **printed to the API console**
+in development, so you can click through every flow offline.
 
-### Testing
+Try the core loop: **Templates** → approve → **Workflows** → Enable →
+**Settings → Integrations** → Connect Stripe (demo) → open an invoice → **Send reminder now**.
+
+## Scripts
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | API (watch) + web (Vite) |
+| `npm run typecheck` | TypeScript across all packages |
+| `npm test` | API unit + integration tests (needs `DATABASE_URL`) |
+| `npm run test:e2e` | Builds the app and runs Playwright browser tests |
+| `npm run build` | Production build (shared → API → web) |
+| `npm start` | Run the built API (`apps/api/dist/server.js`) |
+| `npm run db:migrate` / `db:roles` / `db:seed` | Schema, least-privilege roles, demo data |
+| `npm run smoke` | Post-deploy smoke test (`BASE=https://… npm run smoke`) |
+
+### Tests
 
 ```bash
-npm run typecheck && npm run build
-npm run test:e2e                                  # Playwright UI tests
-bash scripts/e2e-flow.sh                          # API flows (mock mode, API on :4000)
-npx tsx scripts/e2e-production-paths.ts           # signed Stripe webhooks, scheduler
+# Integration tests exercise Row-Level Security when run with the app role, as CI does:
+npm run db:roles
+DATABASE_URL=postgres://autocollect_app:autocollect_app_dev@localhost:5433/autocollect \
+SERVICE_DATABASE_URL=postgres://autocollect_service:autocollect_service_dev@localhost:5433/autocollect \
+MIGRATION_DATABASE_URL=postgres://autocollect:autocollect_dev@localhost:5433/autocollect \
+npm test
 ```
 
-`e2e-production-paths.ts` needs an API started with
-`STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_e2e POSTMARK_WEBHOOK_TOKEN=pm_e2e DUNNING_SCAN_INTERVAL_MS=2000 PORT=4001`
-(see the header of the script).
+Covered: scheduling (timezones, DST, weekends, catch-up), template rendering and HTML
+escaping, CSV parsing, tenant isolation (including a pooled-connection leak regression
+test), the full password lifecycle, CSRF, invitations, credit grants, dunning, signed
+Stripe webhooks (Connect + billing), and 21 browser flows.
 
-## How the core flows work
+## How it works
 
-- **Invoices in:** Stripe Connect OAuth imports the account's *open* invoices,
-  then webhooks (`invoice.finalized/updated/voided/marked_uncollectible/paid`)
-  keep them in sync. CSV import is on the Settings page.
-- **Reminders out:** every workspace starts with a 4-step sequence
-  (−2, +1, +7, +14 days from due date). Templates must be approved once; the
-  scheduler (or Vercel cron) then sends due steps. Each send costs 1 credit.
-  Failed sends are retried with backoff (5 automatic attempts); "Send now"
-  retries immediately.
-- **Payment stops reminders:** `invoice.paid` for Stripe invoices, or
-  `checkout.session.completed` for Payment Links created for CSV invoices.
-- **Delivery tracking:** Postmark delivery/open/click/bounce webhooks update each
-  message. A hard bounce or spam complaint pauses the invoice.
+- **Invoices in** — Stripe Connect imports open invoices (resumable for large accounts) and
+  webhooks keep them in sync; QuickBooks syncs every 15 minutes; CSV import dedupes
+  customers and updates on re-upload.
+- **Reminders out** — a default 4-step sequence (−2, +1, +7, +14 days around the due date),
+  editable per workspace. Nothing sends until templates are approved. Steps fire at the
+  workspace's send hour in its timezone, optionally skipping weekends. Invoices imported
+  long overdue get only the most relevant reminder, and two reminders are never sent
+  less than ~a day apart. Each send costs one credit; failures retry with backoff and
+  permanently undeliverable addresses pause the invoice.
+- **Payment stops reminders** — `invoice.paid` (Stripe), Payment Link checkout, QuickBooks
+  balance → 0, or "Mark paid".
+- **Replies** — signed Reply-To routing; AI classification (dispute / promise / question);
+  suggested responses in the reply inbox; admins notified by email.
+- **Plans & credits** — Starter (free) → Growth → Pro → Agency via Stripe Checkout; plan
+  changes and cancellation through the Stripe Customer Portal; credits granted once per
+  paid billing period.
 
-## Stripe setup
+## Security model (summary)
 
-1. Dashboard → **Connect** → Settings → OAuth: enable OAuth, add the redirect
-   URI `APP_URL/integrations/stripe/callback`
-   (local: `http://localhost:4000/integrations/stripe/callback`). Copy the
-   **Client ID** (`ca_...`) → `STRIPE_CONNECT_CLIENT_ID`.
-2. Developers → API keys → **Secret key** (`sk_test_...`) → `STRIPE_SECRET_KEY`.
-3. Webhooks:
-   - **Local:** `stripe listen --forward-to localhost:4000/integrations/stripe/webhook`
-     and put the printed `whsec_...` in `STRIPE_WEBHOOK_SECRET` (restart the API).
-   - **Production:** add an endpoint `APP_URL/integrations/stripe/webhook` with
-     **"Listen to events on Connected accounts"** enabled, events
-     `invoice.finalized`, `invoice.updated`, `invoice.paid`,
-     `invoice.payment_failed`, `invoice.voided`, `invoice.marked_uncollectible`,
-     `checkout.session.completed`. Copy its signing secret (`whsec_...`).
-     If you sell plans, add a second **platform** endpoint (same URL) for
-     `checkout.session.completed` and `customer.subscription.deleted`.
+- Session cookies: `HttpOnly`, `SameSite=Lax`, `Secure` + `__Host-` prefix in production; server-side sessions (revocable, listed per device).
+- Passwords: argon2id; lockout after 5 failures; timing-safe login; reset/verification tokens are single-use and hashed at rest.
+- CSRF: Origin allow-list + required `X-Requested-With` on authenticated writes.
+- Tenancy: RLS-enforced runtime role + explicit `tenant_id` filters; connections reset before reuse.
+- Webhooks: Stripe signatures (multiple endpoint secrets), constant-time Postmark tokens, idempotent processing.
+- Production refuses to start with missing or unsafe configuration.
 
-`STRIPE_WEBHOOK_SECRET` is the endpoint's signing secret (`whsec_...`), not an
-account id (`acct_...`).
-
-## Postmark setup
-
-- Server → API Tokens → `POSTMARK_SERVER_TOKEN`; a verified sender →
-  `POSTMARK_FROM_EMAIL`.
-- Generate a random `POSTMARK_WEBHOOK_TOKEN`, then in Postmark add webhooks:
-  - delivery events → `APP_URL/email/webhook/postmark?token=<POSTMARK_WEBHOOK_TOKEN>`
-    (Delivery, Bounce, Spam complaint, Open, Link click)
-  - inbound replies → `APP_URL/inbound/postmark?token=<POSTMARK_WEBHOOK_TOKEN>`
-
-## Production (Vercel)
-
-`vercel.json` serves the SPA and runs the API as a function under `/api`.
-Set these environment variables in Vercel:
-
-| Variable | Value |
-|---|---|
-| `NODE_ENV` | `production` |
-| `DATABASE_URL` | RLS-enforced app role (`npm run db:roles` creates `autocollect_app`) |
-| `SERVICE_DATABASE_URL` | BYPASSRLS service role (`autocollect_service`) — webhooks/cron need it |
-| `APP_URL` | `https://<your-domain>/api` |
-| `WEB_ORIGIN` | `https://<your-domain>` |
-| `CREDENTIALS_ENCRYPTION_KEY` | exactly 32 random characters |
-| `OAUTH_STATE_SECRET` | long random string |
-| `CRON_SECRET` | long random string (Vercel Cron sends it as `Authorization: Bearer`) |
-| `POSTMARK_SERVER_TOKEN`, `POSTMARK_FROM_EMAIL`, `POSTMARK_WEBHOOK_TOKEN` | see above |
-| `STRIPE_SECRET_KEY`, `STRIPE_CONNECT_CLIENT_ID`, `STRIPE_WEBHOOK_SECRET` | live-mode values |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | redirect URI `APP_URL/auth/google/callback` |
-| `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD` | not the defaults |
-| `ANTHROPIC_API_KEY` | optional (AI template drafts) |
-
-Run `npm run db:migrate` against the production database on every deploy. The
-API refuses to start in production if required settings are missing or unsafe.
-
-Vercel Cron triggers `/api/cron/dunning` every 5 minutes. Vercel's Hobby plan
-limits how often crons run; on Hobby, use Pro or an external scheduler that
-calls the route with the `x-cron-secret` header.
-On a long-lived host (`npm start` in `apps/api`) the in-process scheduler runs
-instead.
+See **`docs/PRODUCTION.md`** to deploy.

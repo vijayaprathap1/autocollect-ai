@@ -1,166 +1,148 @@
-import type { FastifyInstance } from "fastify";
-import { z } from "zod";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { config } from "../../config.js";
-import { servicePool, query } from "../../lib/db.js";
+import { servicePool, withServiceTransaction } from "../../lib/db.js";
 import {
-  hashPassword, verifyPassword, createSession, setSessionCookie,
-  clearSessionCookie, extractCookieToken, hashToken, generateToken,
-  findUserByEmail, resolveUserMembership, provisionUserAndTenant, devLogin,
+  createSession,
+  setSessionCookie,
+  hashToken,
+  generateToken,
+  resolveUserMembership,
+  provisionUserAndTenant,
+  readCookie,
+  setCookie,
 } from "../../lib/auth.js";
-import { badRequest, unauthorized, notFound } from "../../lib/errors.js";
-import { sendEmail, postmarkEnabled } from "../../lib/postmark.js";
-import { passwordResetEmail, emailVerificationEmail, teamInviteEmail } from "../../lib/email-templates.js";
 import { googleEnabled, googleExchangeCode, googleGetUserInfo, googleAuthorizeUrl } from "../../lib/oauth.js";
 
+const NONCE_COOKIE = "ac_google_nonce";
+const STATE_TTL_MS = 15 * 60 * 1000;
+
+function webUrl(path: string): string {
+  return `${config.webOrigin.split(",")[0].replace(/\/$/, "")}${path}`;
+}
+
+function fail(reply: FastifyReply, code: string) {
+  setCookie(reply, NONCE_COOKIE, "", 0);
+  return reply.redirect(webUrl(`/login?error=${encodeURIComponent(code)}`));
+}
+
+class OAuthFlowError extends Error {
+  constructor(public code: string) {
+    super(code);
+  }
+}
+
 /**
- * Google OAuth authentication endpoints.
+ * "Sign in with Google".
+ *
+ * Security properties:
+ *  - Login CSRF: `state` is single-use AND bound to the initiating browser via
+ *    an HttpOnly nonce cookie, so a victim can't be logged into an attacker's
+ *    account by visiting a crafted callback URL.
+ *  - Account pre-hijacking: if someone pre-registered this email with a
+ *    password but never verified it, Google's verified email proves ownership,
+ *    so that unverified password and any sessions are wiped.
+ *  - Platform admins cannot use Google sign-in (separate admin audience).
  */
 export async function googleAuthRoutes(app: FastifyInstance) {
-  // ─── GET /auth/google ────────────────────────────────────────────────
-  // Initiate Google OAuth flow
-  app.get("/auth/google", { config: { public: true } }, async (req, reply) => {
-    if (!googleEnabled) {
-      throw notFound("Google OAuth not configured");
-    }
-
-    // Generate state for CSRF protection
+  app.get("/auth/google", { config: { public: true, rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (_req, reply) => {
+    if (!googleEnabled) return reply.redirect(webUrl("/login?error=google_unavailable"));
     const state = generateToken();
-    const stateHash = hashToken(state);
-    
-    // Store state in oauth_states table (reuse existing mechanism)
-    const client = await servicePool.connect();
-    try {
-      await client.query("BEGIN");
-      await client.query(
-        `INSERT INTO oauth_states (state_hash, tenant_id, provider, session_hash, expires_at)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [
-          stateHash,
-          null, // No tenant yet for Google OAuth
-          "google",
-          hashToken(state), // Session hash is the state itself for OAuth
-          new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 min TTL
-        ]
-      );
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
-
-    const googleUrl = googleAuthorizeUrl(state);
-    return reply.redirect(googleUrl);
+    const nonce = generateToken();
+    await servicePool.query(
+      `INSERT INTO oauth_states (state_hash, tenant_id, provider, session_hash, expires_at)
+       VALUES ($1, NULL, 'google', $2, $3)`,
+      [hashToken(state), hashToken(nonce), new Date(Date.now() + STATE_TTL_MS).toISOString()],
+    );
+    setCookie(reply, NONCE_COOKIE, nonce, STATE_TTL_MS / 1000);
+    return reply.redirect(googleAuthorizeUrl(state));
   });
 
-  // ─── GET /auth/google/callback ───────────────────────────────────────
-  // Handle Google OAuth callback
-  app.get("/auth/google/callback", { config: { public: true } }, async (req, reply) => {
-    const query = req.query as { code?: string; state?: string };
-    const { code, state } = query;
+  app.get("/auth/google/callback", { config: { public: true, rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const q = req.query as { code?: string; state?: string; error?: string };
+    if (q.error) return fail(reply, q.error === "access_denied" ? "google_cancelled" : "google_failed");
+    if (!googleEnabled) return fail(reply, "google_unavailable");
+    if (!q.code || !q.state) return fail(reply, "google_failed");
 
-    if (!code || !state) {
-      throw badRequest("Missing code or state parameter");
-    }
+    const nonce = readCookie(req, NONCE_COOKIE);
+    if (!nonce) return fail(reply, "google_state");
+    const claimed = await servicePool.query(
+      `UPDATE oauth_states SET consumed_at = now()
+        WHERE state_hash = $1 AND provider = 'google' AND session_hash = $2
+          AND consumed_at IS NULL AND expires_at > now()
+        RETURNING id`,
+      [hashToken(q.state), hashToken(nonce)],
+    );
+    if (!claimed.rowCount) return fail(reply, "google_state");
+    setCookie(reply, NONCE_COOKIE, "", 0);
 
-    if (!googleEnabled) {
-      throw notFound("Google OAuth not configured");
-    }
-
-    // Verify state
-    const client = await servicePool.connect();
+    // Network calls happen before (never inside) a DB transaction.
+    let profile: { email: string; name: string };
     try {
-      await client.query("BEGIN");
-      
-      // Check if state exists and is valid
-      const stateResult = await client.query<{ state_hash: string }>(
-        `SELECT state_hash FROM oauth_states 
-         WHERE state_hash = $1 AND provider = $2 AND consumed_at IS NULL AND expires_at > now()`,
-        [hashToken(state), "google"]
-      );
+      const tokens = await googleExchangeCode(q.code);
+      const info = await googleGetUserInfo(tokens.accessToken);
+      if (!info.email || !info.verified_email) return fail(reply, "google_unverified");
+      profile = { email: info.email.toLowerCase().trim(), name: (info.name || info.email.split("@")[0]).slice(0, 100) };
+    } catch (err) {
+      req.log.error({ err }, "google oauth exchange failed");
+      return fail(reply, "google_failed");
+    }
 
-      if (!stateResult.rows[0]) {
-        await client.query("ROLLBACK");
-        throw badRequest("Invalid or expired OAuth state");
-      }
+    try {
+      const result = await withServiceTransaction(async (client) => {
+        const existing = await client.query<{
+          id: string; status: string; is_super_admin: boolean; email_verified_at: string | null;
+        }>(`SELECT id, status, is_super_admin, email_verified_at FROM users WHERE email = $1 FOR UPDATE`, [profile.email]);
 
-      // Mark state as used
-      await client.query(
-        `UPDATE oauth_states SET consumed_at = now() WHERE state_hash = $1`,
-        [hashToken(state)]
-      );
-
-      // Exchange code for tokens
-      const tokens = await googleExchangeCode(code);
-      
-      // Get user info from Google
-      const googleUser = await googleGetUserInfo(tokens.accessToken);
-      
-      // Check if email is verified
-      if (!googleUser.verified_email) {
-        await client.query("ROLLBACK");
-        throw badRequest("Google email not verified");
-      }
-
-      // Find or create user
-      let user = await findUserByEmail(client, googleUser.email);
-      let isNewUser = false;
-
-      if (!user) {
-        // Create new user
-        isNewUser = true;
-        const passwordHash = await hashToken(generateToken()); // Random password for OAuth users
-        const userResult = await client.query<{ id: string }>(
-          `INSERT INTO users (email, password_hash, display_name, status, email_verified_at)
-           VALUES ($1, $2, $3, 'active', now())
-           RETURNING id`,
-          [googleUser.email, passwordHash, googleUser.name]
-        );
-        
-        if (!userResult.rows[0]) {
-          await client.query("ROLLBACK");
-          throw badRequest("Failed to create user");
+        let userId: string;
+        let isNew = false;
+        const row = existing.rows[0];
+        if (!row) {
+          const created = await client.query<{ id: string }>(
+            `INSERT INTO users (email, password_hash, display_name, status, email_verified_at, last_login_at)
+             VALUES ($1, NULL, $2, 'active', now(), now()) RETURNING id`,
+            [profile.email, profile.name],
+          );
+          userId = created.rows[0].id;
+          isNew = true;
+        } else {
+          if (row.is_super_admin) throw new OAuthFlowError("admin_use_password");
+          if (row.status === "suspended") throw new OAuthFlowError("account_suspended");
+          userId = row.id;
+          if (!row.email_verified_at || row.status === "pending") {
+            // Pre-hijack defence: the unverified password was never proven to belong to this inbox.
+            await client.query(
+              `UPDATE users SET password_hash = NULL, status = 'active', email_verified_at = now(),
+                                failed_login_count = 0, locked_until = NULL, updated_at = now()
+                WHERE id = $1`,
+              [userId],
+            );
+            await client.query(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
+            await client.query(`DELETE FROM email_verification_tokens WHERE user_id = $1`, [userId]);
+          } else {
+            await client.query(`UPDATE users SET last_login_at = now(), failed_login_count = 0, locked_until = NULL WHERE id = $1`, [userId]);
+          }
         }
-        
-        user = await findUserByEmail(client, googleUser.email);
-        
-        // Double-check that we got the user back
-        if (!user) {
-          await client.query("ROLLBACK");
-          throw badRequest("Failed to retrieve created user");
+
+        let membership = await resolveUserMembership(client, userId);
+        if (!membership) {
+          const org = await provisionUserAndTenant(client, userId, `${profile.name}'s workspace`, profile.email);
+          membership = { tenantId: org.tenantId, role: org.role, tenantSlug: org.tenantSlug };
+          isNew = true;
         }
-      } else if (user.status !== "active") {
-        await client.query("ROLLBACK");
-        throw badRequest("Account is not active");
-      }
+        const token = await createSession(client, userId, {
+          ip: req.ip,
+          userAgent: req.headers["user-agent"],
+          tenantId: membership.tenantId,
+        });
+        return { token, isNew };
+      });
 
-      // Provision tenant if needed (similar to dev-login)
-      let membership = await resolveUserMembership(client, user.id);
-      if (!membership) {
-        // Create a tenant for this user
-        const orgName = googleUser.name || googleUser.email.split("@")[0];
-        const org = await provisionUserAndTenant(client, user.id, orgName);
-        membership = { tenantId: org.tenantId, role: org.role, tenantSlug: org.tenantSlug };
-      }
-
-      // Create session
-      const token = await createSession(client, user.id, req.ip, req.headers["user-agent"]);
-      setSessionCookie(reply, token);
-      
-      await client.query("COMMIT");
-
-      // Redirect to frontend
-      const redirectUrl = isNewUser 
-        ? `${config.webOrigin}/dashboard?welcome=true`
-        : `${config.webOrigin}/dashboard`;
-      
-      return reply.redirect(redirectUrl);
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
+      setSessionCookie(reply, result.token);
+      return reply.redirect(webUrl(result.isNew ? "/dashboard?welcome=1" : "/dashboard"));
+    } catch (err) {
+      if (err instanceof OAuthFlowError) return fail(reply, err.code);
+      req.log.error({ err }, "google sign-in failed");
+      return fail(reply, "google_failed");
     }
   });
 }

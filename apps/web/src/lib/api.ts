@@ -1,45 +1,57 @@
 import { useMutation, type UseMutationOptions } from "@tanstack/react-query";
 import { useToast } from "@/components/ui";
 
-export const API_BASE: string = (import.meta.env.VITE_API_URL as string | undefined) ?? "/api";
+export const API_BASE: string = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "/api";
+/** Cross-origin API (split-domain deploy) needs `include` so the session cookie is sent. */
+const CREDENTIALS: RequestCredentials = /^https?:\/\//.test(API_BASE) ? "include" : "same-origin";
 
-export type ApiErrorBody = { error: { code: string; message: string } };
+export type ApiErrorBody = { error: { code: string; message: string; requestId?: string } };
 
 export class ApiClientError extends Error {
   status: number;
   code: string;
-  constructor(status: number, code: string, message: string) {
+  requestId?: string;
+  constructor(status: number, code: string, message: string, requestId?: string) {
     super(message);
     this.status = status;
     this.code = code;
+    this.requestId = requestId;
   }
 }
 
-function headers(json: boolean): Record<string, string> {
-  const h: Record<string, string> = {};
-  if (json) h["content-type"] = "application/json";
-  return h;
+/** Absolute URL for top-level navigations to the API (OAuth starts, etc.). */
+export function apiUrl(path: string): string {
+  return `${API_BASE}${path}`;
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const hasBody = init.body !== undefined && init.body !== null;
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    credentials: "same-origin",
-    headers: { ...headers(hasBody), ...init.headers },
-  });
+  const hasJsonBody = typeof init.body === "string";
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      credentials: CREDENTIALS,
+      headers: {
+        // Required by the API's CSRF protection for authenticated writes.
+        "x-requested-with": "autocollect-web",
+        ...(hasJsonBody ? { "content-type": "application/json" } : {}),
+        ...init.headers,
+      },
+    });
+  } catch {
+    throw new ApiClientError(0, "NETWORK_ERROR", "Can't reach the server. Check your connection and try again.");
+  }
   if (!res.ok) {
     let body: ApiErrorBody | null = null;
     try {
       body = (await res.json()) as ApiErrorBody;
     } catch {
-      /* ignore */
+      /* non-JSON error */
     }
-    throw new ApiClientError(
-      res.status,
-      body?.error.code ?? "HTTP_ERROR",
-      body?.error.message ?? `Request failed (${res.status})`,
-    );
+    const message =
+      body?.error?.message ??
+      (res.status >= 500 ? "Something went wrong on our side. Please try again." : `Request failed (${res.status})`);
+    throw new ApiClientError(res.status, body?.error?.code ?? "HTTP_ERROR", message, body?.error?.requestId);
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
@@ -54,6 +66,8 @@ export const api = {
   del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
 
+// ─── Me / auth ──────────────────────────────────────────────────────────────
+
 export type TenantBranding = {
   appName?: string;
   logoUrl?: string;
@@ -61,15 +75,31 @@ export type TenantBranding = {
   hideBranding?: boolean;
 };
 
+export type Role = "owner" | "admin" | "member";
+
 export type MeResponse = {
-  user: { id: string; role: string; email: string; isSuperAdmin: boolean; sessionType?: "tenant" | "admin" };
+  user: {
+    id: string;
+    role: Role | null;
+    email: string;
+    displayName: string | null;
+    isSuperAdmin: boolean;
+    sessionType?: "tenant" | "admin";
+    organizationCount: number;
+  };
   tenant: {
     id: string;
     name: string;
     slug: string;
-    tone: string;
+    tone: "friendly" | "professional" | "firm";
     emailDomain: string | null;
+    currency: string;
+    timezone: string;
+    sendHour: number;
+    skipWeekends: boolean;
+    replyNotifications: boolean;
     plan: string;
+    planName: string;
     invoiceLimit: number | null;
     seatLimit: number | null;
     seatsUsed: number;
@@ -79,45 +109,90 @@ export type MeResponse = {
     invoiceCount: number;
     creditBalance: number;
     creditsPerMonth: number;
+    stripeConnected: boolean;
+    subscription: { status: string; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; canManageBilling: boolean };
   } | null;
   templates: { approvedTemplates: number; totalTemplates: number };
 };
 
-export async function fetchMe(): Promise<MeResponse> {
-  return api.get<MeResponse>("/me");
+export const fetchMe = () => api.get<MeResponse>("/me");
+
+export type Providers = { password: boolean; google: boolean; signup: boolean };
+export const getProviders = () => api.get<Providers>("/auth/providers");
+
+export const login = (email: string, password: string, rememberMe: boolean) =>
+  api.post<{ ok: boolean }>("/auth/login", { email, password, rememberMe });
+export const adminLogin = (email: string, password: string) => api.post<{ ok: boolean }>("/auth/admin/login", { email, password });
+export const signup = (body: { name: string; email: string; password: string; organizationName?: string; timezone?: string }) =>
+  api.post<{ ok: boolean; message: string }>("/auth/signup", body);
+export const resendVerification = (email: string) => api.post<{ ok: boolean; message: string }>("/auth/resend-verification", { email });
+export const verifyEmail = (token: string) => api.post<{ ok: boolean; signedIn: boolean }>("/auth/verify-email", { token });
+export const forgotPassword = (email: string) => api.post<{ ok: boolean; message: string }>("/auth/forgot-password", { email });
+export const resetPassword = (token: string, password: string) => api.post<{ ok: boolean; message: string }>("/auth/reset-password", { token, password });
+export const logout = () => api.post<{ ok: boolean }>("/auth/logout");
+export const changePassword = (currentPassword: string, newPassword: string) =>
+  api.post<{ ok: boolean; otherSessionsSignedOut: number }>("/auth/change-password", { currentPassword, newPassword });
+export const updateProfile = (displayName: string) => api.put<{ ok: boolean; displayName: string }>("/auth/profile", { displayName });
+
+export type SessionDto = { id: string; ip: string | null; userAgent: string | null; createdAt: string; lastSeenAt: string | null; expiresAt: string; current: boolean };
+export const getSessions = () => api.get<{ sessions: SessionDto[] }>("/auth/sessions");
+export const revokeSession = (id: string) => api.del<{ ok: boolean }>(`/auth/sessions/${id}`);
+export const revokeOtherSessions = () => api.post<{ ok: boolean; revoked: number }>("/auth/sessions/revoke-others");
+
+export type OrganizationDto = { id: string; name: string; slug: string; role: Role; current: boolean };
+export const getOrganizations = () => api.get<{ organizations: OrganizationDto[] }>("/auth/organizations");
+export const switchOrganization = (tenantId: string) => api.post<{ ok: boolean }>("/auth/switch-organization", { tenantId });
+export async function createOrganization(name: string): Promise<{ ok: boolean; tenantId: string; tenantSlug: string; role: string }> {
+  return api.post("/auth/create-organization", { name });
 }
 
 export async function seedDemo(): Promise<{ ok: boolean; customers: number; invoices: number }> {
   return api.post<{ ok: boolean; customers: number; invoices: number }>("/demo/seed");
 }
 
+// ─── Settings ───────────────────────────────────────────────────────────────
+
+export type OrganizationSettings = Partial<{
+  name: string;
+  tone: "friendly" | "professional" | "firm";
+  currency: string;
+  timezone: string;
+  sendHour: number;
+  skipWeekends: boolean;
+  replyNotifications: boolean;
+}>;
+export const updateOrganization = (body: OrganizationSettings) => api.put<{ ok: boolean }>("/settings/organization", body);
+
+export async function updateBranding(branding: Partial<TenantBranding>): Promise<{ branding: TenantBranding; plan: string }> {
+  return api.put<{ branding: TenantBranding; plan: string }>("/settings/branding", branding);
+}
+
+// ─── Integrations ───────────────────────────────────────────────────────────
+
 export type IntegrationDto = {
   id: string;
   source: string;
   status: string;
   createdAt: string;
+  accountId: string | null;
+  livemode: boolean | null;
+  importComplete: boolean | null;
+  lastSyncAt: string | null;
 };
 
 export type IntegrationsResponse = {
   integrations: IntegrationDto[];
   sms: { enabled: boolean; mock: boolean; fromNumber: string | null };
+  stripe: { mode: "live" | "test" | "mock" };
 };
 
-export async function getIntegrations(): Promise<IntegrationsResponse> {
-  return api.get<IntegrationsResponse>("/integrations");
-}
+export const getIntegrations = () => api.get<IntegrationsResponse>("/integrations");
+export const stripeConnect = () => api.post<{ url: string }>("/integrations/stripe/connect");
+export const stripeDisconnect = () => api.post<{ ok: boolean }>("/integrations/stripe/disconnect");
+export const qboConnect = () => api.post<{ url: string }>("/integrations/qbo/connect");
+export const qboSync = () => api.post<{ synced: number; mock: boolean; lastSyncAt: string }>("/integrations/qbo/sync");
 
-export async function stripeConnect(): Promise<{ url: string }> {
-  return api.post<{ url: string }>("/integrations/stripe/connect");
-}
-
-export async function qboConnect(): Promise<{ url: string }> {
-  return api.post<{ url: string }>("/integrations/qbo/connect");
-}
-
-export async function qboSync(): Promise<{ synced: number; mock: boolean; lastSyncAt: string }> {
-  return api.post<{ synced: number; mock: boolean; lastSyncAt: string }>("/integrations/qbo/sync");
-}
+// ─── Customers / invoices ───────────────────────────────────────────────────
 
 export type CustomerDto = {
   id: string;
@@ -132,20 +207,15 @@ export type CustomerDto = {
   paidCount: number;
 };
 
-export async function getCustomers(params?: { q?: string; limit?: number; offset?: number }): Promise<{
-  customers: CustomerDto[];
-  limit: number;
-  offset: number;
-  hasMore: boolean;
-}> {
+function qs(params?: Record<string, string | number | undefined>): string {
   const sp = new URLSearchParams();
-  if (params?.q) sp.set("q", params.q);
-  if (params?.limit !== undefined) sp.set("limit", String(params.limit));
-  if (params?.offset !== undefined) sp.set("offset", String(params.offset));
-  const qs = sp.toString();
-  return api.get<{ customers: CustomerDto[]; limit: number; offset: number; hasMore: boolean }>(
-    `/customers${qs ? `?${qs}` : ""}`,
-  );
+  for (const [k, v] of Object.entries(params ?? {})) if (v !== undefined && v !== "") sp.set(k, String(v));
+  const s = sp.toString();
+  return s ? `?${s}` : "";
+}
+
+export async function getCustomers(params?: { q?: string; limit?: number; offset?: number }) {
+  return api.get<{ customers: CustomerDto[]; limit: number; offset: number; hasMore: boolean }>(`/customers${qs(params)}`);
 }
 
 export type InvoiceDto = {
@@ -164,27 +234,16 @@ export type InvoiceDto = {
   lineItems: unknown;
   nextStepIndex: number;
   nextStepDueAt: string | null;
+  snoozedUntil?: string | null;
+  lastPaymentFailure?: { at: string; reason: string | null } | null;
   createdAt: string;
   updatedAt: string;
 };
 
 export type InvoiceListResponse = { invoices: InvoiceDto[]; limit: number; offset: number; hasMore: boolean };
 
-export async function getInvoices(params?: {
-  status?: string;
-  source?: string;
-  q?: string;
-  limit?: number;
-  offset?: number;
-}): Promise<InvoiceListResponse> {
-  const sp = new URLSearchParams();
-  if (params?.status) sp.set("status", params.status);
-  if (params?.source) sp.set("source", params.source);
-  if (params?.q) sp.set("q", params.q);
-  if (params?.limit !== undefined) sp.set("limit", String(params.limit));
-  if (params?.offset !== undefined) sp.set("offset", String(params.offset));
-  const qs = sp.toString();
-  return api.get<InvoiceListResponse>(`/invoices${qs ? `?${qs}` : ""}`);
+export async function getInvoices(params?: { status?: string; source?: string; q?: string; limit?: number; offset?: number }) {
+  return api.get<InvoiceListResponse>(`/invoices${qs(params)}`);
 }
 
 export type TimelineEntry = {
@@ -194,46 +253,41 @@ export type TimelineEntry = {
   channel: string;
   status: string;
   sentAt: string | null;
+  error?: string | null;
   content: string | null;
   classification: string | null;
   promiseDate: string | null;
 };
 
-export type InvoiceDetailResponse = {
-  invoice: InvoiceDto;
-  timeline: TimelineEntry[];
-};
+export type InvoiceDetailResponse = { invoice: InvoiceDto; timeline: TimelineEntry[] };
 
-export async function getInvoice(id: string): Promise<InvoiceDetailResponse> {
-  return api.get<InvoiceDetailResponse>(`/invoices/${id}`);
+export const getInvoice = (id: string) => api.get<InvoiceDetailResponse>(`/invoices/${id}`);
+
+export type InvoiceAction = "pause" | "resume" | "mark_paid" | "mark_uncollectible" | "reopen" | "send_now";
+export async function invoiceAction(id: string, action: InvoiceAction | string): Promise<{ ok: boolean; status: string; sent?: boolean }> {
+  return api.post(`/invoices/${id}/actions`, { action });
 }
 
-export async function invoiceAction(id: string, action: string): Promise<{ ok: boolean; status: string }> {
-  return api.post<{ ok: boolean; status: string }>(`/invoices/${id}/actions`, { action });
+export async function createPayLink(id: string): Promise<{ paymentLink: string }> {
+  return api.post<{ paymentLink: string }>(`/invoices/${id}/pay-link`);
 }
+
+// ─── Workflows / templates ──────────────────────────────────────────────────
+
+export type WorkflowStepDto = { order: number; delayDays: number; channel: "email" | "sms" | string; templateId: string | null };
 
 export type WorkflowDto = {
   id: string;
   name: string;
   isDefault: boolean;
   enabled: boolean;
-  steps: {
-    order: number;
-    delayDays: number;
-    channel: string;
-    templateId: string | null;
-  }[];
+  steps: WorkflowStepDto[];
   createdAt: string;
 };
 
-export async function getWorkflows(): Promise<{ workflows: WorkflowDto[] }> {
-  return api.get<{ workflows: WorkflowDto[] }>("/workflows");
-}
+export const getWorkflows = () => api.get<{ workflows: WorkflowDto[]; smsAvailable: boolean }>("/workflows");
 
-export async function updateWorkflow(
-  id: string,
-  body: { enabled?: boolean; name?: string; steps?: WorkflowDto["steps"] },
-): Promise<{ workflow: WorkflowDto }> {
+export async function updateWorkflow(id: string, body: { enabled?: boolean; name?: string; steps?: WorkflowStepDto[] }): Promise<{ workflow: WorkflowDto }> {
   return api.put<{ workflow: WorkflowDto }>(`/workflows/${id}`, body);
 }
 
@@ -244,43 +298,25 @@ export type TemplateDto = {
   body: string;
   approved: boolean;
   createdAt: string;
+  unknownPlaceholders?: string[];
 };
 
-export async function getTemplates(): Promise<{ templates: TemplateDto[] }> {
-  return api.get<{ templates: TemplateDto[] }>("/templates");
-}
+export const getTemplates = () => api.get<{ templates: TemplateDto[]; variables?: string[] }>("/templates");
 
-export async function updateTemplate(
-  id: string,
-  body: { subject?: string; body?: string; approved?: boolean },
-): Promise<{ template: TemplateDto }> {
+export async function updateTemplate(id: string, body: { subject?: string; body?: string; approved?: boolean }): Promise<{ template: TemplateDto }> {
   return api.put<{ template: TemplateDto }>(`/templates/${id}`, body);
 }
 
-export async function draftTemplates(): Promise<{
-  drafts: { stepKey: string; subject: string; body: string }[];
-}> {
+export async function draftTemplates(): Promise<{ drafts: { stepKey: string; subject: string; body: string }[] }> {
   return api.post<{ drafts: { stepKey: string; subject: string; body: string }[] }>("/templates/draft");
 }
 
+// ─── Dashboard / activity / replies ─────────────────────────────────────────
+
 export type DashboardRangeKey = "7d" | "30d" | "90d";
-
-export type DashboardRange = {
-  from: string;
-  to: string;
-  asOf: string;
-  lastUpdatedAt: string | null;
-};
-
+export type DashboardRange = { from: string; to: string; asOf: string; lastUpdatedAt: string | null };
 export type DashboardCurrency = string;
-
-export type DashboardCredits = {
-  balance: number;
-  monthlyAllowance: number;
-  periodStart: string | null;
-  periodEnd: string | null;
-  subscriptionStatus: string | null;
-};
+export type DashboardCredits = { balance: number; monthlyAllowance: number; periodStart: string | null; periodEnd: string | null; subscriptionStatus: string | null };
 
 export type DashboardSummaryDto = {
   outstandingTotal: number;
@@ -295,35 +331,15 @@ export type DashboardSummaryDto = {
   credits: DashboardCredits;
 };
 
-export async function getDashboard(range: DashboardRangeKey = "30d"): Promise<DashboardSummaryDto> {
-  const params = new URLSearchParams({ range });
-  return api.get<DashboardSummaryDto>(`/dashboard?${params.toString()}`);
-}
+export const getDashboard = (range: DashboardRangeKey = "30d") => api.get<DashboardSummaryDto>(`/dashboard?range=${range}`);
 
 export type ActivityResponse = {
   audit: { id: string; actor: string; action: string; detail: unknown; createdAt: string }[];
-  messages: {
-    id: string;
-    channel: string;
-    status: string;
-    sentAt: string | null;
-    stepIndex: number;
-    invoiceNumber: string | null;
-    customerName: string | null;
-  }[];
-  replies: {
-    id: string;
-    classification: string;
-    content: string;
-    createdAt: string;
-    invoiceNumber: string | null;
-    customerName: string | null;
-  }[];
+  messages: { id: string; channel: string; status: string; sentAt: string | null; stepIndex: number; invoiceNumber: string | null; customerName: string | null }[];
+  replies: { id: string; classification: string; content: string; createdAt: string; invoiceNumber: string | null; customerName: string | null }[];
 };
 
-export async function getActivity(): Promise<ActivityResponse> {
-  return api.get<ActivityResponse>("/activity");
-}
+export const getActivity = () => api.get<ActivityResponse>("/activity");
 
 export type ReplyInboxItem = {
   id: string;
@@ -338,126 +354,106 @@ export type ReplyInboxItem = {
   invoiceNumber: string | null;
 };
 
-export async function getReplies(): Promise<{ replies: ReplyInboxItem[] }> {
-  return api.get<{ replies: ReplyInboxItem[] }>("/replies");
+export const getReplies = () => api.get<{ replies: ReplyInboxItem[] }>("/replies");
+
+export async function replyAction(id: string, action: "send" | "regenerate" | "resolve", body?: string) {
+  return api.put<{ ok: boolean; action: string; suggestedBody?: string | null }>(`/replies/${id}`, body !== undefined ? { action, body } : { action });
 }
 
-export async function replyAction(
-  id: string,
-  action: "send" | "regenerate" | "resolve",
-  body?: string,
-): Promise<{ ok: boolean; action: string; suggestedBody?: string | null }> {
-  return api.put<{ ok: boolean; action: string; suggestedBody?: string | null }>(
-    `/replies/${id}`,
-    body !== undefined ? { action, body } : { action },
-  );
-}
+// ─── Billing ────────────────────────────────────────────────────────────────
 
-export type BillingDto = { plan: string; invoiceLimit: number | null; invoicesUsed: number };
-
-export async function getBilling(): Promise<BillingDto> {
-  return api.get<BillingDto>("/billing");
-}
-
-export async function billingCheckout(plan: string): Promise<{ url: string; plan: string }> {
-  return api.post<{ url: string; plan: string }>("/billing/checkout", { plan });
-}
-
-export type MemberDto = { id: string; email: string | null; role: string; createdAt: string };
-
-export async function getMembers(): Promise<{ members: MemberDto[] }> {
-  return api.get<{ members: MemberDto[] }>("/users");
-}
-
-export async function addMember(email: string, role = "member"): Promise<{ member: MemberDto }> {
-  return api.post<{ member: MemberDto }>("/users", { email, role });
-}
-
-export type InvitationDto = {
-  id: string;
-  email: string;
-  role: string;
-  status: string;
-  expiresAt: string;
-  createdAt: string;
+export type PlanDto = {
+  key: string;
+  name: string;
+  monthlyPriceCents: number;
+  invoiceLimit: number | null;
+  seatLimit: number | null;
+  creditsPerMonth: number;
+  whiteLabel: boolean;
+  available: boolean;
 };
 
-export async function getInvitations(): Promise<{ invitations: InvitationDto[] }> {
-  return api.get<{ invitations: InvitationDto[] }>("/invitations");
+export type BillingDto = {
+  plan: string;
+  planName?: string;
+  invoiceLimit: number | null;
+  invoicesUsed: number;
+  seatLimit?: number | null;
+  seatsUsed?: number;
+  credits?: { balance: number; perMonth: number; sentLast30Days: number };
+  subscription?: { status: string; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; managedByStripe: boolean };
+  canManageBilling?: boolean;
+  mode?: "stripe" | "mock" | "disabled";
+  plans?: PlanDto[];
+};
+
+export const getBilling = () => api.get<BillingDto>("/billing");
+export const billingCheckout = (plan: string) => api.post<{ url: string; plan: string; mode?: string }>("/billing/checkout", { plan });
+export const billingPortal = () => api.post<{ url: string }>("/billing/portal");
+
+// ─── Team ───────────────────────────────────────────────────────────────────
+
+export type MemberDto = {
+  id: string;
+  email: string | null;
+  displayName?: string | null;
+  role: Role | string;
+  createdAt: string;
+  lastLoginAt?: string | null;
+  isYou?: boolean;
+};
+
+export const getMembers = () => api.get<{ members: MemberDto[] }>("/users");
+export const changeMemberRole = (id: string, role: Role) => api.put<{ ok: boolean }>(`/users/${id}/role`, { role });
+export const removeMember = (id: string) => api.del<{ ok: boolean }>(`/users/${id}`);
+export const leaveWorkspace = () => api.post<{ ok: boolean }>("/users/leave");
+
+export type InvitationDto = { id: string; email: string; role: string; status: string; expiresAt: string; createdAt: string };
+
+export const getInvitations = () => api.get<{ invitations: InvitationDto[] }>("/invitations");
+export const sendInvitation = (email: string, role = "member") => api.post<{ invitation: InvitationDto }>("/invitations", { email, role });
+export const resendInvitation = (id: string) => api.post<{ ok: boolean }>(`/invitations/${id}/resend`);
+export const revokeInvitation = (id: string) => api.del<{ ok: boolean }>(`/invitations/${id}`);
+
+export type InvitationPreview = { email: string; role: string; organizationName: string; accountExists: boolean };
+export const previewInvitation = (id: string, token: string) =>
+  api.get<InvitationPreview>(`/invitations/${encodeURIComponent(id)}/preview?token=${encodeURIComponent(token)}`);
+export async function acceptInvitation(id: string, token: string, account?: { displayName: string; password: string }) {
+  return api.post<{ ok: boolean; message: string; tenantId: string }>(`/invitations/${encodeURIComponent(id)}/accept`, { token, ...account });
 }
 
-export async function sendInvitation(email: string, role = "member"): Promise<{ invitation: InvitationDto }> {
-  return api.post<{ invitation: InvitationDto }>("/invitations", { email, role });
-}
+// ─── CSV import ─────────────────────────────────────────────────────────────
 
-export async function revokeInvitation(id: string): Promise<{ ok: boolean }> {
-  return api.del<{ ok: boolean }>(`/invitations/${id}`);
-}
-
-export async function acceptInvitation(id: string, token: string): Promise<{ ok: boolean; message: string }> {
-  return api.post<{ ok: boolean; message: string }>(`/invitations/${id}/accept`, { token });
-}
-
-export async function createOrganization(name: string): Promise<{ ok: boolean; tenantId: string; tenantSlug: string; role: string }> {
-  return api.post<{ ok: boolean; tenantId: string; tenantSlug: string; role: string }>("/auth/create-organization", { name });
-}
-
-export async function updateBranding(
-  branding: Partial<TenantBranding>,
-): Promise<{ branding: TenantBranding; plan: string }> {
-  return api.put<{ branding: TenantBranding; plan: string }>("/settings/branding", branding);
-}
-
-export async function createPayLink(id: string): Promise<{ paymentLink: string }> {
-  return api.post<{ paymentLink: string }>(`/invoices/${id}/pay-link`);
-}
-
-export async function importCsv(file: File): Promise<{
+export type CsvImportResult = {
   imported: number;
   failed: number;
   total: number;
   errors: { row: number; error: string }[];
-}> {
+  mapping?: Record<string, string>;
+};
+
+export async function importCsv(file: File, opts: { dateFormat?: "mdy" | "dmy" } = {}): Promise<CsvImportResult> {
   const fd = new FormData();
+  if (opts.dateFormat) fd.append("dateFormat", opts.dateFormat);
   fd.append("file", file);
-  const res = await fetch(`${API_BASE}/integrations/csv/import`, {
-    method: "POST",
-    credentials: "same-origin",
-    body: fd,
-  });
-  if (!res.ok) {
-    let body: ApiErrorBody | null = null;
-    try {
-      body = (await res.json()) as ApiErrorBody;
-    } catch {
-      /* ignore */
-    }
-    throw new ApiClientError(res.status, body?.error.code ?? "HTTP_ERROR", body?.error.message ?? "Import failed");
-  }
-  return (await res.json()) as {
-    imported: number;
-    failed: number;
-    total: number;
-    errors: { row: number; error: string }[];
-  };
+  return request<CsvImportResult>("/integrations/csv/import", { method: "POST", body: fd });
 }
+
+// ─── Mutation helper ────────────────────────────────────────────────────────
 
 export function useApiMutation<TData, TVariables, TError extends ApiClientError, TContext = unknown>(
   mutationFn: (vars: TVariables) => Promise<TData>,
-  options?: Omit<UseMutationOptions<TData, TError, TVariables, TContext>, "mutationFn" | "onError" | "onSuccess" | "onSettled">
+  options?: Omit<UseMutationOptions<TData, TError, TVariables, TContext>, "mutationFn" | "onError">,
 ) {
   const { showToast } = useToast();
   return useMutation<TData, TError, TVariables, TContext>({
     mutationFn,
     ...options,
-    onError: (_error, _variables, _context) => {
-      showToast(_error.message, "error");
-    },
-    onSuccess: (_data, _variables, _context) => {
-      // success handled by caller if needed
-    },
-    onSettled: (_data, _error, _variables, _context) => {
-      // settled handled by caller if needed
-    },
+    onError: (error) => showToast(error.message, "error"),
   });
+}
+
+/** Human message for any thrown value. */
+export function errorMessage(err: unknown, fallback = "Something went wrong"): string {
+  return err instanceof Error && err.message ? err.message : fallback;
 }

@@ -52,6 +52,7 @@ async function requestTokens(form: URLSearchParams): Promise<QboTokens> {
   }, config.providerTimeoutMs);
   if (!res.ok) {
     const detail = await res.text();
+    if (res.status === 400 && detail.includes("invalid_grant")) throw new QboAuthError("QuickBooks connection expired — reconnect required");
     throw new Error(`QBO token error ${res.status}: ${detail.slice(0, 300)}`);
   }
   const body = (await res.json()) as {
@@ -97,30 +98,40 @@ export type QboInvoiceLike = {
   Line?: { Description?: string; Amount?: string | number }[];
 };
 
+/** Thrown when QuickBooks rejects our tokens (reconnect required). */
+export class QboAuthError extends Error {}
+
+/**
+ * Query invoices (optionally only those changed since a timestamp), paging
+ * through results — QBO returns at most 1000 rows per query (100 by default).
+ */
 export async function qboQueryInvoices(
   accessToken: string,
   realmId: string,
   changedSince?: string,
 ): Promise<QboInvoiceLike[]> {
-  const where = changedSince
-    ? ` WHERE Metadata.LastUpdatedTime > '${changedSince}'`
+  const where = changedSince && !Number.isNaN(Date.parse(changedSince))
+    ? ` WHERE Metadata.LastUpdatedTime > '${new Date(changedSince).toISOString()}'`
     : "";
-  const url = `${API_BASE}/${realmId}/query?query=${encodeURIComponent(
-    `SELECT * FROM Invoice${where}`,
-  )}`;
-
-  const res = await fetchWithTimeout(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json",
-    },
-  }, config.providerTimeoutMs);
-  if (!res.ok) {
-    const detail = await res.text();
-    throw new Error(`QBO query error ${res.status}: ${detail.slice(0, 300)}`);
+  const all: QboInvoiceLike[] = [];
+  const pageSize = 1000;
+  for (let start = 1; start < 100_000; start += pageSize) {
+    const q = `SELECT * FROM Invoice${where} STARTPOSITION ${start} MAXRESULTS ${pageSize}`;
+    const url = `${API_BASE}/${encodeURIComponent(realmId)}/query?query=${encodeURIComponent(q)}&minorversion=73`;
+    const res = await fetchWithTimeout(url, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+    }, config.providerTimeoutMs);
+    if (res.status === 401 || res.status === 403) throw new QboAuthError(`QuickBooks authorization failed (${res.status})`);
+    if (!res.ok) {
+      const detail = await res.text();
+      throw new Error(`QBO query error ${res.status}: ${detail.slice(0, 300)}`);
+    }
+    const body = (await res.json()) as { QueryResponse?: { Invoice?: QboInvoiceLike[] } };
+    const page = body.QueryResponse?.Invoice ?? [];
+    all.push(...page);
+    if (page.length < pageSize) break;
   }
-  const body = (await res.json()) as { QueryResponse?: { Invoice?: QboInvoiceLike[] } };
-  return body.QueryResponse?.Invoice ?? [];
+  return all;
 }
 
 /** Deterministic mock invoices so the sync flow works with no Intuit credentials. */

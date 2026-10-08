@@ -1,4 +1,7 @@
-import { pool, query } from "../lib/db.js";
+import { closeDb, servicePool } from "../lib/db.js";
+import { isMainModule } from "../lib/main-module.js";
+
+const query = servicePool.query.bind(servicePool) as typeof servicePool.query;
 import { hashPassword } from "../lib/auth.js";
 import { DEFAULT_STEPS, DEFAULT_TEMPLATE_BODIES as TEMPLATE_BODIES } from "../lib/default-sequence.js";
 
@@ -76,13 +79,19 @@ export async function seed(): Promise<void> {
     [tenantId],
   );
 
+  await query(
+    `INSERT INTO subscriptions (tenant_id, plan, status, credits_per_month) VALUES ($1, 'starter', 'active', 50)
+     ON CONFLICT (tenant_id) DO NOTHING`,
+    [tenantId],
+  );
+
   console.log(`Seed complete: tenant "${DEV_TENANT_SLUG}" (${tenantId}), user ${DEV_USER}`);
   console.log("Templates seeded (unapproved). Approve them in the app to start dunning.");
 }
 
-if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+if (isMainModule(import.meta.url)) {
   seed()
-    .then(() => pool.end())
+    .then(() => closeDb())
     .catch((err) => {
       console.error("Seed failed:", err);
       process.exit(1);

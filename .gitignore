@@ -1,13 +1,34 @@
+# Dependencies & build output
 node_modules/
 dist/
-.pgdata/
-.env
-.env.local
-DEMO-CREDENTIALS.md
-*.log
-.DS_Store
 coverage/
-.GAP-ANALYSIS.mdpgdata/
-pgdata_test/
 test-results/
+playwright-report/
 *.tsbuildinfo
+
+# Local databases (never commit)
+.pgdata/
+pgdata/
+pgdata_test/
+
+# Secrets
+.env
+.env.*
+!.env.example
+DEMO-CREDENTIALS.md
+
+# Logs & scratch
+*.log
+logfile
+*.backup
+Untitled-*.md
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+.vercel
+.env*

@@ -1,129 +1,110 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { api } from "@/lib/api";
-import { Button, Input } from "@/components/ui";
+import { signup, resendVerification } from "@/lib/api";
+import { Button } from "@/components/ui";
+import { Alert, AuthLayout, Field, GoogleButton, PasswordField, passwordIssues } from "@/components/auth";
 
 export function SignUp() {
   const [name, setName] = useState("");
+  const [organizationName, setOrganizationName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [needsVerification, setNeedsVerification] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [resent, setResent] = useState(false);
+
+  const pwIssues = passwordIssues(password);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    setError("");
+    if (pwIssues.length) {
+      setError(`Password needs ${pwIssues.join(", ")}.`);
+      return;
+    }
+    setError(null);
     setLoading(true);
     try {
-      await api.post<{ ok: boolean; message: string }>("/auth/signup", {
+      await signup({
         name: name.trim(),
         email: email.trim(),
         password,
+        organizationName: organizationName.trim() || undefined,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
-      // Signup always returns ok: true with a message (verification email sent)
-      // In dev mode, the email is logged to console
-      // In production, it's sent via Postmark
-      // User needs to verify email before logging in
-      setNeedsVerification(true);
-    } catch (err: unknown) {
-      const apiErr = err as { message?: string };
-      setError(apiErr.message ?? "Signup failed");
+      setSent(true);
+    } catch (err) {
+      setError((err as Error).message ?? "Sign-up failed");
     } finally {
       setLoading(false);
     }
   }
 
-  const handleGoogleLogin = () => {
-    const googleAuthUrl = import.meta.env.VITE_API_URL?.startsWith("http")
-      ? new URL("/auth/google", import.meta.env.VITE_API_URL).toString()
-      : "/api/auth/google";
-    window.location.assign(googleAuthUrl);
-  };
-
-  if (needsVerification) {
+  if (sent) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bg px-4">
-        <div className="w-full max-w-sm text-center">
-          <div className="text-2xl font-bold text-primary mb-2">AutoCollect AI</div>
-          <div className="rounded-xl border border-slate-200 bg-surface p-6 shadow-sm">
-            <h2 className="text-lg font-semibold mb-2">Check your email</h2>
-            <p className="text-sm text-muted mb-4">
-              We've sent a verification link to <strong>{email}</strong>. Please check your inbox and click the link to activate your account.
-            </p>
-            <Link to="/login" className="text-sm text-primary hover:underline">
-              Back to sign in
-            </Link>
-          </div>
+      <AuthLayout title="Check your email" footer={<Link to="/login" className="font-medium text-primary hover:underline">Back to sign in</Link>}>
+        <div className="space-y-4 text-sm text-muted">
+          <p>
+            We sent a confirmation link to <strong className="text-ink">{email}</strong>. Click it to activate your workspace — the link
+            expires in 24 hours.
+          </p>
+          <p>Can't find it? Check your spam folder.</p>
+          {resent ? (
+            <Alert tone="success">A new link is on its way.</Alert>
+          ) : (
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={async () => {
+                await resendVerification(email).catch(() => undefined);
+                setResent(true);
+              }}
+            >
+              Resend confirmation email
+            </Button>
+          )}
         </div>
-      </div>
+      </AuthLayout>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg px-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-6 text-center">
-          <div className="text-2xl font-bold text-primary">AutoCollect AI</div>
-          <p className="mt-1 text-sm text-muted">
-            Create your workspace
-          </p>
-        </div>
-        <form onSubmit={submit} className="space-y-4 rounded-xl border border-slate-200 bg-surface p-6 shadow-sm">
-          {error && (
-            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
-          )}
-          <div>
-            <label className="block text-sm font-medium mb-1">Your name</label>
-            <Input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Jane Smith"
-              autoFocus
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Work email</label>
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="jane@company.com"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Password</label>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Min. 8 characters, include a letter and number"
-              minLength={8}
-              required
-            />
-          </div>
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Creating account..." : "Create account"}
-          </Button>
-          <div className="flex items-center justify-center mt-4">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleGoogleLogin}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700"
-            >
-              Sign in with Google
-            </Button>
-          </div>
-          <p className="text-center text-sm text-muted">
-            Already have an account?{" "}
-            <Link to="/login" className="text-primary hover:underline">Sign in</Link>
-          </p>
-        </form>
-      </div>
-    </div>
+    <AuthLayout
+      title="Start getting paid faster"
+      subtitle="Free plan · no credit card required"
+      footer={
+        <>
+          Already have an account?{" "}
+          <Link to="/login" className="font-medium text-primary hover:underline">
+            Sign in
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={submit} className="space-y-4" noValidate>
+        {error && <Alert>{error}</Alert>}
+        <Field label="Your name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Jane Smith" autoFocus required maxLength={100} />
+        <Field
+          label="Company"
+          value={organizationName}
+          onChange={(e) => setOrganizationName(e.target.value)}
+          autoComplete="organization"
+          placeholder="Acme Studio"
+          hint="Shown to your customers in reminder emails. You can change it later."
+          maxLength={120}
+        />
+        <Field label="Work email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="jane@company.com" required />
+        <PasswordField label="Password" value={password} onChange={setPassword} autoComplete="new-password" showStrength />
+        <Button type="submit" className="w-full" disabled={loading || !name.trim() || !email.trim() || !password}>
+          {loading ? "Creating your workspace…" : "Create account"}
+        </Button>
+        <p className="text-center text-xs text-muted">
+          By creating an account you agree to the{" "}
+          <Link to="/terms" className="font-medium text-primary hover:underline">Terms of Service</Link> and{" "}
+          <Link to="/privacy" className="font-medium text-primary hover:underline">Privacy Policy</Link>.
+        </p>
+      </form>
+      <GoogleButton label="Sign up with Google" />
+    </AuthLayout>
   );
 }

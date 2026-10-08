@@ -10,6 +10,11 @@ import {
   type TemplateDto,
 } from "@/lib/api";
 
+const KNOWN_VARS = ["client_name", "company_name", "amount", "due_date", "pay_link", "invoice_number"];
+function unknownVars(text: string): string[] {
+  return [...new Set([...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).filter((v) => !KNOWN_VARS.includes(v)))];
+}
+
 function TemplateRow({ template }: { template: TemplateDto }) {
   const [subject, setSubject] = useState(template.subject);
   const [body, setBody] = useState(template.body);
@@ -94,6 +99,16 @@ function TemplateRow({ template }: { template: TemplateDto }) {
         rows={6}
         className="w-full rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
       />
+
+      <p className="mt-2 text-xs text-muted">
+        Placeholders: {KNOWN_VARS.map((v) => `{${v}}`).join(" ")}
+      </p>
+      {unknownVars(`${subject}\n${body}`).length > 0 && (
+        <p className="mt-1 text-xs text-amber-700">
+          Unrecognised placeholder{unknownVars(`${subject}\n${body}`).length > 1 ? "s" : ""}: {unknownVars(`${subject}\n${body}`).map((v) => `{${v}}`).join(", ")} — these
+          would be sent to customers as-is.
+        </p>
+      )}
 
       <div className="mt-3 flex items-center gap-3">
         <Button variant="secondary" onClick={save} disabled={saving || !dirty}>

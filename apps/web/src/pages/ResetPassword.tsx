@@ -1,28 +1,31 @@
 import { useState, type FormEvent } from "react";
-import { Link, useSearchParams, useNavigate } from "react-router-dom";
-import { api } from "@/lib/api";
-import { Button, Input } from "@/components/ui";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { resetPassword } from "@/lib/api";
+import { Button } from "@/components/ui";
+import { Alert, AuthLayout, PasswordField, passwordIssues } from "@/components/auth";
 
 export function ResetPassword() {
-  const [searchParams] = useSearchParams();
+  const [params] = useSearchParams();
   const navigate = useNavigate();
-  const token = searchParams.get("token") || "";
+  const token = params.get("token") ?? "";
+  const isSetup = params.get("setup") === "1";
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    setError("");
+    const issues = passwordIssues(password);
+    if (issues.length) return setError(`Password needs ${issues.join(", ")}.`);
+    if (password !== confirm) return setError("Passwords don't match.");
+    setError(null);
     setLoading(true);
     try {
-      await api.post("/auth/reset-password", { token, password });
-      setSuccess(true);
-      setTimeout(() => navigate("/login", { replace: true }), 2000);
-    } catch (err: unknown) {
-      const apiErr = err as { message?: string };
-      setError(apiErr.message ?? "Reset failed");
+      await resetPassword(token, password);
+      navigate("/login?reset=1", { replace: true });
+    } catch (err) {
+      setError((err as Error).message);
     } finally {
       setLoading(false);
     }
@@ -30,54 +33,32 @@ export function ResetPassword() {
 
   if (!token) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bg px-4">
-        <div className="w-full max-w-sm text-center">
-          <div className="text-2xl font-bold text-primary mb-2">AutoCollect AI</div>
-          <div className="rounded-xl border border-slate-200 bg-surface p-6 shadow-sm">
-            <h2 className="text-lg font-semibold mb-2">Invalid reset link</h2>
-            <p className="text-sm text-muted mb-4">This password reset link is invalid or missing a token.</p>
-            <Link to="/forgot-password" className="text-sm text-primary hover:underline">
-              Request a new reset link
-            </Link>
-          </div>
-        </div>
-      </div>
+      <AuthLayout title="Invalid link" footer={<Link to="/forgot-password" className="font-medium text-primary hover:underline">Request a new link</Link>}>
+        <p className="text-sm text-muted">This password link is missing its token. Request a new one.</p>
+      </AuthLayout>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg px-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-6 text-center">
-          <div className="text-2xl font-bold text-primary">AutoCollect AI</div>
-          <p className="mt-1 text-sm text-muted">Set a new password</p>
-        </div>
-        <form onSubmit={submit} className="space-y-4 rounded-xl border border-slate-200 bg-surface p-6 shadow-sm">
-          {error && (
-            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
-          )}
-          {success && (
-            <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700">
-              Password reset! Redirecting to login…
-            </div>
-          )}
-          <div>
-            <label className="block text-sm font-medium mb-1">New password</label>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Min. 8 characters"
-              minLength={8}
-              autoFocus
-              required
-            />
-          </div>
-          <Button type="submit" className="w-full" disabled={loading || success}>
-            {loading ? "Resetting…" : "Reset password"}
-          </Button>
-        </form>
-      </div>
-    </div>
+    <AuthLayout title={isSetup ? "Set your password" : "Choose a new password"} subtitle={isSetup ? "Finish setting up your account." : undefined}>
+      <form onSubmit={submit} className="space-y-4" noValidate>
+        {error && (
+          <Alert>
+            {error}{" "}
+            {/expired|invalid/i.test(error) && (
+              <Link to="/forgot-password" className="font-medium underline">
+                Get a new link
+              </Link>
+            )}
+          </Alert>
+        )}
+        <PasswordField label="New password" value={password} onChange={setPassword} autoComplete="new-password" showStrength autoFocus />
+        <PasswordField label="Confirm password" value={confirm} onChange={setConfirm} autoComplete="new-password" />
+        <Button type="submit" className="w-full" disabled={loading || !password || !confirm}>
+          {loading ? "Saving…" : isSetup ? "Set password" : "Update password"}
+        </Button>
+        {!isSetup && <p className="text-center text-xs text-muted">For your security, you'll be signed out of all other devices.</p>}
+      </form>
+    </AuthLayout>
   );
 }

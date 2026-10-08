@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { config } from "../../config.js";
+import { config, isDevLike } from "../../config.js";
 import { requireRole } from "../../plugins/tenant.js";
 import { servicePool } from "../../lib/db.js";
 import { badRequest } from "../../lib/errors.js";
@@ -21,6 +21,7 @@ export async function qboRoutes(app: FastifyInstance) {
     async (req) => {
       const sessionToken = extractCookieToken(req);
       if (!sessionToken) throw badRequest("Missing session cookie");
+      if (!qboEnabled && !isDevLike) throw badRequest("QuickBooks is not configured on this server", "QBO_NOT_CONFIGURED");
       const state = await encodeState(req.user.tenantId, "qbo", sessionToken);
       const url = qboEnabled
         ? qboAuthorizeUrl(state)
@@ -42,20 +43,31 @@ export async function qboRoutes(app: FastifyInstance) {
       const q = req.query as { code?: string; state?: string; realmId?: string; error?: string };
 
       if (q.error) {
-        return reply.redirect(`${config.webOrigin}/settings?qbo=error`);
+        return reply.redirect(`${config.webOrigin.split(",")[0]}/settings?tab=integrations&qbo=error&reason=cancelled`);
       }
-      if (!q.code || !q.state || !q.realmId) throw badRequest("Missing code, state or realmId");
+      const fail = (reason: string) => reply.redirect(`${config.webOrigin.split(",")[0]}/settings?tab=integrations&qbo=error&reason=${reason}`);
+      if (!q.code || !q.state || !q.realmId) return fail("invalid_request");
 
       const sessionToken = extractCookieToken(req);
-      if (!sessionToken) throw badRequest("Missing session cookie");
-      const tenantId = await decodeState(q.state, "qbo", sessionToken);
+      if (!sessionToken) return fail("signed_out");
+      let tenantId: string;
+      try {
+        tenantId = await decodeState(q.state, "qbo", sessionToken);
+      } catch {
+        return fail("expired");
+      }
       const realmId = q.realmId;
 
       let tokens: { accessToken: string; refreshToken: string; expiresAt: string } | null = null;
-      if (qboEnabled) {
-        tokens = await qboExchangeCode(q.code);
-      } else if (q.code !== "dev_qbo_code") {
-        throw badRequest("Invalid dev OAuth code");
+      try {
+        if (qboEnabled) {
+          tokens = await qboExchangeCode(q.code);
+        } else if (!isDevLike || q.code !== "dev_qbo_code") {
+          return fail("invalid_request");
+        }
+      } catch (err) {
+        req.log.error({ err }, "qbo token exchange failed");
+        return fail("exchange_failed");
       }
 
       const client = await servicePool.connect();
@@ -67,7 +79,9 @@ const devTokens: QboTokens = { accessToken: "dev_token", refreshToken: "dev_refr
       await client.query(
         `INSERT INTO integrations (tenant_id, source, status, credentials)
          VALUES ($1, 'qbo', 'active', $2::jsonb)
-         ON CONFLICT DO NOTHING`,
+         ON CONFLICT (tenant_id, source) DO UPDATE
+           SET status = 'active', credentials = EXCLUDED.credentials,
+               settings = COALESCE(integrations.settings, '{}'::jsonb) - 'last_error', updated_at = now()`,
         [
           tenantId,
           JSON.stringify({
@@ -86,7 +100,7 @@ const devTokens: QboTokens = { accessToken: "dev_token", refreshToken: "dev_refr
         client.release();
       }
 
-      return reply.redirect(`${config.webOrigin}/settings?qbo=connected`);
+      return reply.redirect(`${config.webOrigin.split(",")[0]}/settings?tab=integrations&qbo=connected`);
     },
   );
 
