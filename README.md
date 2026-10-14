@@ -1,100 +1,117 @@
 # AutoCollect AI
 
-Automated B2B invoice collection for freelancers, agencies and small businesses.
-Connect Stripe or QuickBooks (or upload a CSV), approve your reminder templates
-once, and AutoCollect sends polite, escalating reminders — at your customers'
-business hours, with a one-click payment link — until the invoice is paid.
-Customer replies are read by AI: disputes pause reminders, promises to pay
-snooze them, and your team is notified.
+**Automated B2B invoice chasing (dunning) for small businesses.** AutoCollect pulls in unpaid invoices, runs multi-step reminder workflows by email and SMS, triages customer replies, and shows what's overdue on one dashboard, so finance teams stop chasing payments by hand.
 
-## Stack
+> Status: working MVP, built solo end-to-end. Runs fully locally with seeded demo data.
 
-| | |
+---
+
+## Why I built it
+
+Tools in this space (Chaser, YayPay, Invoiced) start at roughly $259–$500/month and cap users or workflows. AutoCollect is designed around **unlimited users and credit-based pricing** (1 credit per email, 2 per SMS), so a small team pays for what it sends, not for seats.
+
+## What it does
+
+- **Invoice ingestion:** Stripe, QuickBooks Online sync, and CSV import feed one shared ingest pipeline
+- **Dunning workflows:** configurable multi-step reminder sequences with templates, run on a scheduler (cron module)
+- **Reply inbox:** inbound customer replies are captured and triaged alongside each invoice
+- **Dashboard:** overdue totals, invoice and customer views, and an activity feed
+- **Teams and roles:** organizations with owner / admin / member roles and email invitations
+- **Credits and billing:** per-tenant credit wallet with an append-only transaction ledger; plan allowances granted from Stripe webhooks; sends pause automatically when credits run out
+- **Super-admin console:** platform KPIs, org and user management, credit grants, suspensions, and an audit feed
+
+## Architecture
+
+npm-workspaces monorepo:
+
+```
+apps/
+  api/        Fastify 5 + TypeScript REST API (also exported as a serverless handler)
+    src/modules/   auth, invoices, customers, workflows, replies, integrations,
+                   billing, cron, dashboard, members, admin, activity, settings
+    src/migrations SQL migrations
+  web/        React 19 + Vite SPA
+packages/
+  shared/     Types and Zod schemas shared by API and web
+e2e/          Playwright end-to-end tests
+docs/         Product requirements and product analysis
+```
+
+### Engineering decisions worth noting
+
+- **Multi-tenancy with PostgreSQL row-level security (RLS).** Tenant isolation is enforced in the database, not only in application code. Admin operations use a separate pool with `BYPASSRLS`.
+- **Self-hosted auth.** argon2id password hashing and DB-backed sessions in `HttpOnly`/`SameSite=Lax` cookies. Verification, reset, and invite tokens are random, hashed at rest, and single-use.
+- **Credits in the same transaction as the send.** The wallet debit happens in the same DB transaction as the message insert, so a send can never happen without being paid for.
+- **Hardening:** rate limiting on auth routes, Helmet security headers, CORS, Zod validation on every input, and an audit log for auth, admin, and credit events.
+- **Stripe webhooks** verified against the raw request body.
+
+## Tech stack
+
+| Layer | Tools |
 |---|---|
-| `apps/api` | Fastify 5 · TypeScript · PostgreSQL (Row-Level Security) · Stripe Connect + Billing · Postmark · Twilio · QuickBooks · Anthropic |
-| `apps/web` | React 19 · Vite 6 · TanStack Query · Tailwind |
-| `packages/shared` | Shared domain types |
-| `e2e/` | Playwright browser tests |
-| `docs/` | `GO-LIVE.md` (step-by-step launch checklist), `PRODUCTION.md` (deploy & operate), `PRODUCTION-READINESS-REVIEW.md` (audit & roadmap) |
+| Frontend | React 19, TypeScript, Vite, TanStack Query, React Router, Tailwind CSS |
+| Backend | Node.js 20, Fastify 5, TypeScript, Zod, `pg` (raw SQL, no ORM) |
+| Data | PostgreSQL with row-level security |
+| Auth | argon2id, DB sessions, `jose` |
+| Integrations | Stripe, QuickBooks Online, CSV |
+| Testing | Playwright (e2e), `tsc` type checks across all workspaces |
 
-## Quick start (local)
+## Running locally
 
-Requires Node 20.11+ and Docker (for Postgres on port 5433).
+Requires Node.js 20.11+ and Docker (for Postgres on port 5433).
 
 ```bash
-docker compose up -d                          # 1. Postgres 17
-npm install                                   # 2. dependencies
-copy apps\api\.env.example apps\api\.env      # 3. config   (macOS/Linux: cp)
-npm run db:migrate                            # 4. schema
-npm run db:seed                               #    demo workspace
-npm run dev                                   # 5. API :4000 + web :5175
+git clone https://github.com/vijayaprathap1/autocollect-ai.git
+cd autocollect-ai
+docker compose up -d                          # Postgres 17
+npm install
+cp apps/api/.env.example apps/api/.env        # Windows: copy apps\api\.env.example apps\api\.env
+npm run db:migrate                            # apply SQL migrations
+npm run db:seed                               # seed a demo org and user
+npm run dev                                   # API :4000 + web :5175
 ```
 
 Open http://localhost:5175 and sign in as `dev-user@autocollect.local` / `dev-password-auto`
 (platform admin: http://localhost:5175/admin/login, `admin@autocollect.local` / `admin123`).
-
-Every external service falls back to a local mock when its keys are empty.
-Emails (verification links, invites, reminders) are **printed to the API console**
-in development, so you can click through every flow offline.
-
-Try the core loop: **Templates** → approve → **Workflows** → Enable →
-**Settings → Integrations** → Connect Stripe (demo) → open an invoice → **Send reminder now**.
-
-## Scripts
+Every external service falls back to a local mock when its keys are empty, and emails are
+printed to the API console, so every flow works offline.
 
 | Command | What it does |
 |---|---|
 | `npm run dev` | API (watch) + web (Vite) |
 | `npm run typecheck` | TypeScript across all packages |
-| `npm test` | API unit + integration tests (needs `DATABASE_URL`) |
-| `npm run test:e2e` | Builds the app and runs Playwright browser tests |
+| `npm test` | API unit + integration tests (needs the database) |
+| `npm run test:e2e` | Builds the app and runs the Playwright browser tests |
 | `npm run build` | Production build (shared → API → web) |
-| `npm start` | Run the built API (`apps/api/dist/server.js`) |
 | `npm run db:migrate` / `db:roles` / `db:seed` | Schema, least-privilege roles, demo data |
 | `npm run smoke` | Post-deploy smoke test (`BASE=https://… npm run smoke`) |
 
-### Tests
+To run the integration tests with Row-Level Security enforced (as CI does), run
+`npm run db:roles` and point the test run at the restricted roles:
 
 ```bash
-# Integration tests exercise Row-Level Security when run with the app role, as CI does:
-npm run db:roles
 DATABASE_URL=postgres://autocollect_app:autocollect_app_dev@localhost:5433/autocollect \
 SERVICE_DATABASE_URL=postgres://autocollect_service:autocollect_service_dev@localhost:5433/autocollect \
 MIGRATION_DATABASE_URL=postgres://autocollect:autocollect_dev@localhost:5433/autocollect \
 npm test
 ```
 
-Covered: scheduling (timezones, DST, weekends, catch-up), template rendering and HTML
-escaping, CSV parsing, tenant isolation (including a pooled-connection leak regression
-test), the full password lifecycle, CSRF, invitations, credit grants, dunning, signed
-Stripe webhooks (Connect + billing), and 21 browser flows.
+## Deploying
 
-## How it works
+- `docs/GO-LIVE.md`: step-by-step launch checklist (accounts, secrets, DNS, verification)
+- `docs/PRODUCTION.md`: deploy and operate (Vercel or Docker), runbook, security checklist
+- `docs/PRODUCTION-READINESS-REVIEW.md`: audit findings, fixes and roadmap
 
-- **Invoices in** — Stripe Connect imports open invoices (resumable for large accounts) and
-  webhooks keep them in sync; QuickBooks syncs every 15 minutes; CSV import dedupes
-  customers and updates on re-upload.
-- **Reminders out** — a default 4-step sequence (−2, +1, +7, +14 days around the due date),
-  editable per workspace. Nothing sends until templates are approved. Steps fire at the
-  workspace's send hour in its timezone, optionally skipping weekends. Invoices imported
-  long overdue get only the most relevant reminder, and two reminders are never sent
-  less than ~a day apart. Each send costs one credit; failures retry with backoff and
-  permanently undeliverable addresses pause the invoice.
-- **Payment stops reminders** — `invoice.paid` (Stripe), Payment Link checkout, QuickBooks
-  balance → 0, or "Mark paid".
-- **Replies** — signed Reply-To routing; AI classification (dispute / promise / question);
-  suggested responses in the reply inbox; admins notified by email.
-- **Plans & credits** — Starter (free) → Growth → Pro → Agency via Stripe Checkout; plan
-  changes and cancellation through the Stripe Customer Portal; credits granted once per
-  paid billing period.
+## Roadmap
 
-## Security model (summary)
+- Cash-flow forecasting from payment history and promise-to-pay dates
+- Customer-facing payment portal
+- Late fees and early-payment discounts
+- Xero integration
+- Per-workspace sending domains (DKIM) for better deliverability
+- Optional TOTP two-factor sign-in for workspace owners
 
-- Session cookies: `HttpOnly`, `SameSite=Lax`, `Secure` + `__Host-` prefix in production; server-side sessions (revocable, listed per device).
-- Passwords: argon2id; lockout after 5 failures; timing-safe login; reset/verification tokens are single-use and hashed at rest.
-- CSRF: Origin allow-list + required `X-Requested-With` on authenticated writes.
-- Tenancy: RLS-enforced runtime role + explicit `tenant_id` filters; connections reset before reuse.
-- Webhooks: Stripe signatures (multiple endpoint secrets), constant-time Postmark tokens, idempotent processing.
-- Production refuses to start with missing or unsafe configuration.
+## Author
 
-See **`docs/PRODUCTION.md`** to deploy.
+**Vijayaprathap P**, Senior Full-Stack Engineer
+[LinkedIn](https://linkedin.com/in/vjprathap) · [GitHub](https://github.com/vijayaprathap1) · [Email](mailto:pvijayaprathap1@gmail.com)
