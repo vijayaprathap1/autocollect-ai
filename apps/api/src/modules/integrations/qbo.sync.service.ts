@@ -1,6 +1,7 @@
-import { servicePool, withTenant } from "../../lib/db.js";
+import { servicePool, withServiceTenant } from "../../lib/db.js";
 import { assertInvoiceCapacity } from "../../lib/billing.js";
-import { qboEnabled, qboMockInvoices, qboQueryInvoices, qboRefreshTokens, type QboInvoiceLike } from "../../lib/qbo.js";
+import { qboEnabled, qboMockInvoices, qboQueryInvoices, qboRefreshTokens, QboAuthError, type QboInvoiceLike } from "../../lib/qbo.js";
+import { isProduction } from "../../config.js";
 import { decryptSecret, encryptSecret } from "../../lib/crypto.js";
 
 const MIN_SYNC_INTERVAL_MS = 5 * 60 * 1000;
@@ -28,8 +29,9 @@ async function upsertQboInvoice(
   realmId: string,
   inv: QboInvoiceLike,
 ): Promise<void> {
-  await withTenant(tenantId, async (client) => {
-    await assertInvoiceCapacity(client, tenantId, "qbo", String(inv.Id));
+  await withServiceTenant(tenantId, async (client) => {
+    const outstanding = toCents(inv.Balance ?? inv.TotalAmt);
+    if (outstanding > 0) await assertInvoiceCapacity(client, tenantId, "qbo", String(inv.Id));
 
     const customerId = inv.CustomerRef?.value ?? null;
     const email = inv.BillEmail?.Address ?? null;
@@ -68,7 +70,12 @@ async function upsertQboInvoice(
                      currency = EXCLUDED.currency,
                      issue_date = EXCLUDED.issue_date,
                      due_date = EXCLUDED.due_date,
-                     status = EXCLUDED.status,
+                     -- never reopen an invoice someone paused; paid/closed always wins
+                     status = CASE WHEN EXCLUDED.status = 'open' AND invoices.status IN ('paused','paid') THEN invoices.status
+                                   ELSE EXCLUDED.status END,
+                     next_step_index = CASE WHEN EXCLUDED.status = 'paid' THEN 9999 ELSE invoices.next_step_index END,
+                     next_step_due_at = CASE WHEN EXCLUDED.status = 'paid' THEN NULL ELSE invoices.next_step_due_at END,
+                     customer_id = COALESCE(EXCLUDED.customer_id, invoices.customer_id),
                      line_items = EXCLUDED.line_items,
                      updated_at = now()`,
       [
@@ -112,6 +119,7 @@ async function syncOne(integration: QboIntegration): Promise<number> {
     if (!credentials.realm_id || !accessToken) return 0;
     invoices = await qboQueryInvoices(accessToken, credentials.realm_id, integration.settings.last_sync_at);
   } else {
+    if (isProduction) throw new Error("QuickBooks is not configured on this server");
     invoices = qboMockInvoices();
   }
 
@@ -120,7 +128,10 @@ async function syncOne(integration: QboIntegration): Promise<number> {
   }
 
   await servicePool.query(
-    `UPDATE integrations SET settings = jsonb_set(settings, '{last_sync_at}', to_jsonb($2::text)) WHERE id = $1`,
+    `UPDATE integrations
+        SET settings = (COALESCE(settings, '{}'::jsonb) - 'last_error') || jsonb_build_object('last_sync_at', $2::text),
+            status = 'active', updated_at = now()
+      WHERE id = $1`,
     [integration.id, new Date().toISOString()],
   );
 
@@ -130,9 +141,9 @@ async function syncOne(integration: QboIntegration): Promise<number> {
 /** Pull changed invoices from every active QBO connection that is due for a sync. */
 export async function syncAllQuickBooks(): Promise<{ tenants: number; invoices: number }> {
   const rows = await servicePool.query<QboIntegration>(
-    `SELECT id, tenant_id, credentials, settings
-       FROM integrations
-      WHERE source = 'qbo' AND status = 'active'`,
+    `SELECT ig.id, ig.tenant_id, ig.credentials, COALESCE(ig.settings, '{}'::jsonb) AS settings
+       FROM integrations ig JOIN tenants t ON t.id = ig.tenant_id
+      WHERE ig.source = 'qbo' AND ig.status = 'active' AND t.status = 'active'`,
   );
 
   let tenants = 0;
@@ -146,9 +157,14 @@ export async function syncAllQuickBooks(): Promise<{ tenants: number; invoices: 
       invoices += await syncOne(integration);
       tenants += 1;
     } catch (err) {
+      // Only an auth failure needs the user to reconnect; transient errors retry next cycle.
       await servicePool.query(
-        `UPDATE integrations SET status = 'error', settings = jsonb_set(settings, '{last_error}', to_jsonb($2::text)) WHERE id = $1`,
-        [integration.id, err instanceof Error ? err.message : String(err)],
+        `UPDATE integrations
+            SET status = CASE WHEN $3 THEN 'error' ELSE status END,
+                settings = COALESCE(settings, '{}'::jsonb) || jsonb_build_object('last_error', $2::text, 'last_error_at', now()::text),
+                updated_at = now()
+          WHERE id = $1`,
+        [integration.id, (err instanceof Error ? err.message : String(err)).slice(0, 500), err instanceof QboAuthError],
       );
     }
   }

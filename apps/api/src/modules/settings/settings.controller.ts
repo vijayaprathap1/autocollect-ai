@@ -1,62 +1,109 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { requireRole } from "../../plugins/tenant.js";
 import { badRequest, forbidden } from "../../lib/errors.js";
 import { tenantPlan } from "../../lib/billing.js";
+import { isValidTimeZone } from "../../lib/schedule.js";
 
 export type TenantBranding = {
   appName?: string;
   logoUrl?: string;
   primaryColor?: string;
   hideBranding?: boolean;
+  /** Postal address shown in the footer of customer reminder emails. */
+  businessAddress?: string;
 };
 
+const organizationSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    tone: z.enum(["friendly", "professional", "firm"]),
+    currency: z.string().trim().toLowerCase().regex(/^[a-z]{3}$/, "Use a 3-letter ISO currency code"),
+    timezone: z.string().trim().max(64).refine(isValidTimeZone, "Unknown time zone"),
+    sendHour: z.number().int().min(0).max(23),
+    skipWeekends: z.boolean(),
+    replyNotifications: z.boolean(),
+  })
+  .partial();
+
 export async function settingsRoutes(app: FastifyInstance) {
+  /** Workspace details + reminder scheduling preferences. */
+  app.put("/settings/organization", { preHandler: requireRole("admin") }, async (req) => {
+    const body = organizationSchema.parse(req.body ?? {});
+    const columns: Record<keyof typeof body, string> = {
+      name: "name",
+      tone: "tone",
+      currency: "currency",
+      timezone: "timezone",
+      sendHour: "send_hour",
+      skipWeekends: "skip_weekends",
+      replyNotifications: "reply_notifications",
+    };
+    const sets: string[] = [];
+    const values: unknown[] = [req.user.tenantId];
+    for (const [key, col] of Object.entries(columns) as [keyof typeof body, string][]) {
+      if (body[key] === undefined) continue;
+      values.push(body[key]);
+      sets.push(`${col} = $${values.length}`);
+    }
+    if (!sets.length) throw badRequest("Nothing to update");
+    await req.db.query(`UPDATE tenants SET ${sets.join(", ")}, updated_at = now() WHERE id = $1`, values);
+
+    // Scheduling changed: let the engine recompute every open invoice's next send time.
+    if (body.timezone !== undefined || body.sendHour !== undefined || body.skipWeekends !== undefined) {
+      await req.db.query(
+        `UPDATE invoices SET next_step_due_at = NULL WHERE tenant_id = $1 AND status = 'open' AND next_step_index < 9999`,
+        [req.user.tenantId],
+      );
+    }
+    await req.db.query(
+      `INSERT INTO audit_log (tenant_id, actor, action, detail) VALUES ($1, $2, 'organization_updated', $3::jsonb)`,
+      [req.user.tenantId, req.user.email, JSON.stringify(body)],
+    );
+    return { ok: true, organization: body };
+  });
+
   /**
    * White-label branding. Hiding the platform branding is gated to the
    * Agency plan; other fields are available to everyone.
    */
   app.put("/settings/branding", { preHandler: requireRole("admin") }, async (req) => {
-    const body = (req.body ?? {}) as TenantBranding;
-
-    const updates: Record<string, unknown> = {};
-    if (typeof body.appName === "string" && body.appName.trim() !== "") updates.appName = body.appName.trim().slice(0, 60);
-    if (typeof body.logoUrl === "string" && body.logoUrl.trim() !== "") {
-      if (!/^https?:\/\/.+/.test(body.logoUrl)) throw badRequest("logoUrl must be an absolute http(s) URL");
-      updates.logoUrl = body.logoUrl.trim();
-    }
-    if (typeof body.primaryColor === "string" && body.primaryColor.trim() !== "") {
-      if (!/^#[0-9a-fA-F]{6}$/.test(body.primaryColor.trim())) throw badRequest("primaryColor must be a hex color like #2563EB");
-      updates.primaryColor = body.primaryColor.trim();
-    }
-    if (typeof body.hideBranding === "boolean") {
-      if (body.hideBranding) {
-        const { plan } = await tenantPlan(req.db, req.user.tenantId);
-        if (plan !== "agency") {
-          throw forbidden("Hiding platform branding requires the Agency plan", "PLAN_GATE");
-        }
-      }
-      updates.hideBranding = body.hideBranding;
-    }
-
-    if (Object.keys(updates).length === 0) throw badRequest("Nothing to update");
+    const body = z
+      .object({
+        appName: z.string().trim().max(60).optional(),
+        logoUrl: z.union([z.literal(""), z.string().trim().url().max(500).regex(/^https:\/\//, "Logo URL must use https://")]).optional(),
+        primaryColor: z.union([z.literal(""), z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "Use a hex color like #2563EB")]).optional(),
+        hideBranding: z.boolean().optional(),
+        businessAddress: z.string().trim().max(300).optional(),
+      })
+      .parse(req.body ?? {});
 
     const { plan } = await tenantPlan(req.db, req.user.tenantId);
-    const current = await req.db.query<{ branding: Record<string, unknown> | null }>(
-      `SELECT branding FROM tenants WHERE id = $1`,
-      [req.user.tenantId],
-    );
-    const merged = { ...(current.rows[0]?.branding ?? {}), ...updates };
+    if (body.hideBranding && plan !== "agency") {
+      throw forbidden("Hiding platform branding requires the Agency plan", "PLAN_GATE");
+    }
 
-    await req.db.query(`UPDATE tenants SET branding = $2::jsonb WHERE id = $1`, [
+    const current = await req.db.query<{ branding: TenantBranding | null }>(`SELECT branding FROM tenants WHERE id = $1`, [
+      req.user.tenantId,
+    ]);
+    const merged: TenantBranding = { ...(current.rows[0]?.branding ?? {}) };
+    // Empty string clears a field.
+    for (const key of ["appName", "logoUrl", "primaryColor", "businessAddress"] as const) {
+      const v = body[key];
+      if (v === undefined) continue;
+      if (v === "") delete merged[key];
+      else merged[key] = v;
+    }
+    if (body.hideBranding !== undefined) merged.hideBranding = body.hideBranding;
+
+    await req.db.query(`UPDATE tenants SET branding = $2::jsonb, updated_at = now() WHERE id = $1`, [
       req.user.tenantId,
       JSON.stringify(merged),
     ]);
     await req.db.query(
-      `INSERT INTO audit_log (tenant_id, actor, action, detail)
-       VALUES ($1, $2, 'branding_update', $3::jsonb)`,
-      [req.user.tenantId, req.user.email, JSON.stringify(updates)],
+      `INSERT INTO audit_log (tenant_id, actor, action, detail) VALUES ($1, $2, 'branding_update', $3::jsonb)`,
+      [req.user.tenantId, req.user.email, JSON.stringify(body)],
     );
-
     return { branding: merged, plan };
   });
 }

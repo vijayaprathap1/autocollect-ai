@@ -1,31 +1,12 @@
-import { pool, query } from "../lib/db.js";
+import { closeDb, servicePool } from "../lib/db.js";
+import { isMainModule } from "../lib/main-module.js";
+
+const query = servicePool.query.bind(servicePool) as typeof servicePool.query;
 import { hashPassword } from "../lib/auth.js";
+import { DEFAULT_STEPS, DEFAULT_TEMPLATE_BODIES as TEMPLATE_BODIES } from "../lib/default-sequence.js";
 
 const DEV_USER = process.env.SEED_DEV_USER ?? "dev-user@autocollect.local";
 const DEV_TENANT_SLUG = "acme";
-
-// Default dunning steps (relative to due date) per design docs: [-2d, +3d, +10d, +21d]
-const DEFAULT_STEPS = [
-  { key: "reminder_pre", delayDays: -2, subject: "Quick heads-up: {client_name} — invoice {amount} coming due", tone: "friendly" },
-  { key: "reminder_1d", delayDays: 1, subject: "Invoice {amount} is now due — {client_name}", tone: "friendly" },
-  { key: "reminder_7d", delayDays: 7, subject: "Reminder: invoice {amount} from {company_name}", tone: "professional" },
-  { key: "reminder_14d", delayDays: 14, subject: "Overdue: invoice {amount} ({company_name})", tone: "firm" },
-] as const;
-
-const TEMPLATE_BODIES: Record<string, string> = {
-  reminder_pre:
-    "Hi {client_name},\n\nJust a quick heads-up that invoice {amount} is due {due_date}. " +
-    "You can pay in one click here: {pay_link}\n\nThanks for your business!\n{company_name}",
-  reminder_1d:
-    "Hi {client_name},\n\nA gentle reminder that invoice {amount} is now due. " +
-    "You can settle it here: {pay_link}\n\nLet us know if anything looks off.\n{company_name}",
-  reminder_7d:
-    "Hi {client_name},\n\nThis is a reminder that invoice {amount} is past due. " +
-    "Please arrange payment at your earliest convenience: {pay_link}\n\nIf you have questions, just reply.\n{company_name}",
-  reminder_14d:
-    "Hi {client_name},\n\nInvoice {amount} remains unpaid and is now overdue. " +
-    "Please make payment here promptly: {pay_link}\n\nWe value the relationship — reach out if there's an issue we can resolve.\n{company_name}",
-};
 
 export async function seed(): Promise<void> {
   const demoPasswordHash = await hashPassword("dev-password-auto");
@@ -91,13 +72,26 @@ export async function seed(): Promise<void> {
     [tenantId, JSON.stringify(steps)],
   );
 
+  // Credits: without a wallet every send is skipped as "no credits".
+  await query(
+    `INSERT INTO credit_wallets (tenant_id, balance) VALUES ($1, 500)
+     ON CONFLICT (tenant_id) DO NOTHING`,
+    [tenantId],
+  );
+
+  await query(
+    `INSERT INTO subscriptions (tenant_id, plan, status, credits_per_month) VALUES ($1, 'starter', 'active', 50)
+     ON CONFLICT (tenant_id) DO NOTHING`,
+    [tenantId],
+  );
+
   console.log(`Seed complete: tenant "${DEV_TENANT_SLUG}" (${tenantId}), user ${DEV_USER}`);
   console.log("Templates seeded (unapproved). Approve them in the app to start dunning.");
 }
 
-if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+if (isMainModule(import.meta.url)) {
   seed()
-    .then(() => pool.end())
+    .then(() => closeDb())
     .catch((err) => {
       console.error("Seed failed:", err);
       process.exit(1);

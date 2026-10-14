@@ -1,0 +1,35 @@
+name: Scheduled jobs
+
+# Triggers reminder sending, QuickBooks sync and Stripe import resumption on
+# serverless hosts that cannot schedule frequently themselves (Vercel Hobby
+# only runs cron jobs once a day). The endpoint takes a database lease, so
+# overlapping or duplicate triggers are harmless.
+#
+# Repository secrets:  CRON_URL    e.g. https://app.example.com/api/cron/dunning
+#                      CRON_SECRET the deployment CRON_SECRET
+# GitHub runs schedules only from the default branch, may delay them under
+# load, and pauses them after 60 days without repository activity.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: scheduled-jobs
+  cancel-in-progress: false
+
+jobs:
+  dunning:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Trigger
+        env:
+          CRON_URL: ${{ secrets.CRON_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "CRON_URL / CRON_SECRET are not configured; nothing to do."
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error --max-time 90 --retry 2             -H "x-cron-secret: $CRON_SECRET" "$CRON_URL"

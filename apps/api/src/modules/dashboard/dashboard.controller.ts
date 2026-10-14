@@ -41,13 +41,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
               GREATEST(t.created_at, MAX(i.updated_at), MAX(s.updated_at), MAX(w.updated_at)) AS last_updated_at
          FROM tenants t
          LEFT JOIN credit_wallets w ON w.tenant_id = t.id
-         LEFT JOIN LATERAL (
-           SELECT credits_per_month, current_period_start, current_period_end, status, updated_at
-             FROM subscriptions
-            WHERE tenant_id = t.id
-            ORDER BY created_at DESC
-            LIMIT 1
-         ) s ON TRUE
+         LEFT JOIN subscriptions s ON s.tenant_id = t.id
          LEFT JOIN invoices i ON i.tenant_id = t.id
         WHERE t.id = $1
         GROUP BY t.currency, t.created_at, w.balance, s.credits_per_month, s.current_period_start,
@@ -70,10 +64,10 @@ export async function dashboardRoutes(app: FastifyInstance) {
          COALESCE(SUM(amount_due) FILTER (WHERE status = 'paid' AND updated_at >= now() - interval '30 days'), 0)::bigint AS recovered30d,
          COUNT(*) FILTER (WHERE status = 'open')::int AS open_count,
          COUNT(*) FILTER (WHERE status = 'paid' AND updated_at >= now() - interval '30 days')::int AS paid_count_30d,
-         AVG(updated_at::date - issue_date)::int AS avg_dso_days
+         AVG(updated_at::date - issue_date) FILTER (WHERE status = 'paid' AND issue_date IS NOT NULL AND updated_at >= now() - ($2::int * interval '1 day'))::int AS avg_dso_days
        FROM invoices
        WHERE tenant_id = $1`,
-      [tenantId],
+      [tenantId, rangeDays[range]],
     );
     const k = kpis.rows[0];
 

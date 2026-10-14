@@ -1,14 +1,83 @@
 {
-  "version": 2,
-  "builds": [
-    { "src": "apps/web/package.json", "use": "@vercel/static-build", "config": { "distDir": "dist" } },
-    { "src": "apps/api/src/serverless.ts", "use": "@vercel/node" }
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npm ci --no-audit --no-fund",
+  "buildCommand": "npm run build:vercel",
+  "outputDirectory": "apps/web/dist",
+  "build": {
+    "env": {
+      "NODEJS_HELPERS": "0"
+    }
+  },
+  "functions": {
+    "api/index.mjs": {
+      "maxDuration": 60,
+      "memory": 1024,
+      "includeFiles": "node_modules/argon2/**"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/((?!api/|assets/).*)",
+      "destination": "/index.html"
+    }
   ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "apps/api/src/serverless.ts" },
-    { "src": "/(.*)", "dest": "apps/web/dist/index.html" }
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/((?!api/|assets/).*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=(), payment=()"
+        }
+      ]
+    }
   ],
   "crons": [
-    { "path": "/api/cron/dunning", "schedule": "*/5 * * * *" }
+    {
+      "path": "/api/cron/dunning",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/housekeeping",
+      "schedule": "30 3 * * *"
+    }
   ]
 }

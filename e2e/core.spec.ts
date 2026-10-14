@@ -1,102 +1,107 @@
-import { test, expect, type Page, type APIRequestContext } from "@playwright/test";
-
-const API_URL = process.env.PLAYWRIGHT_API_URL ?? "http://localhost:4000";
+import { test, expect, type Page } from "@playwright/test";
 
 /**
- * E2E smoke tests for the core tenant flows.
- * Uses POST /auth/dev-login to get a session cookie, then navigates.
+ * Signed-in flows. Uses the development-only /api/auth/dev-login endpoint to
+ * create a fresh workspace per test (disabled outside development/test).
  */
-async function login(page: Page, email: string): Promise<void> {
-  // Call dev-login API to get session cookie
-  const response = await page.request.post(`${API_URL}/auth/dev-login`, {
-    data: { email },
-  });
-  expect(response.ok()).toBeTruthy();
-
-  // Navigate to dashboard (session cookie is now set)
-  await page.goto("/dashboard");
-  await expect(page.getByText("Dashboard", { exact: true }).first()).toBeVisible();
+async function signIn(page: Page, label: string): Promise<string> {
+  const email = `pw-${label}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@example.com`;
+  const res = await page.request.post("/api/auth/dev-login", { data: { email } });
+  expect(res.ok()).toBeTruthy();
+  return email;
 }
 
-test("fresh tenant lands on dashboard with an empty invoice list", async ({ page }) => {
-  await login(page, `pw-dash-${Date.now()}@example.com`);
-  await expect(page.getByText("Invoices", { exact: true }).first()).toBeVisible();
+test("new workspace lands on the dashboard with onboarding", async ({ page }) => {
+  await signIn(page, "dash");
+  await page.goto("/dashboard");
+  await expect(page.getByRole("heading", { name: /Welcome/ })).toBeVisible();
+  await expect(page.getByText("Finish setup to start collecting automatically")).toBeVisible();
 });
 
-test("navigation reaches Settings with billing, members and branding cards", async ({ page }) => {
-  await login(page, `pw-settings-${Date.now()}@example.com`);
-  await page.getByRole("link", { name: "Settings" }).click();
-  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Billing" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Members" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Branding" })).toBeVisible();
-  await expect(page.getByText("Sync invoices from QuickBooks Online", { exact: false })).toBeVisible();
-});
-
-test("plan ladder is visible and upgrade buttons render", async ({ page }) => {
-  await login(page, `pw-billing-${Date.now()}@example.com`);
-  await page.getByRole("link", { name: "Settings" }).click();
-  await expect(page.getByText("Upgrade to Growth")).toBeVisible();
-  await expect(page.getByText("Upgrade to Pro")).toBeVisible();
-  await expect(page.getByText("Upgrade to Agency")).toBeVisible();
-});
-
-test("seat limit blocks a member invite on the free plan", async ({ page }) => {
-  const email = `pw-members-${Date.now()}@example.com`;
-  await login(page, email);
-  await page.getByRole("link", { name: "Settings" }).click();
-  await page.getByRole("heading", { name: "Members" }).waitFor();
-
-  await page.getByPlaceholder("teammate@company.com").fill("colleague@example.com");
-  await page.getByRole("button", { name: "Invite" }).click();
-  // Backend returns error for seat limit OR the invite succeeds (if seat count mismatch)
-  await page.waitForTimeout(2000);
-  const settingsVisible = await page.getByRole("heading", { name: "Members" }).isVisible();
-  expect(settingsVisible).toBeTruthy();
-});
-
-test("Replies page renders the reply inbox", async ({ page }) => {
-  await login(page, `pw-replies-${Date.now()}@example.com`);
-  await page.getByRole("link", { name: "Replies" }).click();
-  await expect(page.getByRole("heading", { name: "Replies" })).toBeVisible();
-});
-
-test("demo data seeds the workspace with invoices and replies", async ({ page }) => {
-  const email = `pw-demo-${Date.now()}@example.com`;
-  await login(page, email);
-
-  await page.getByRole("button", { name: "Load demo data" }).click();
-  await expect(page.getByText("Loading demo data…")).toBeVisible();
-
-  await expect(page.getByText("Outstanding", { exact: true })).toBeVisible();
-  await expect(page.getByText("Overdue", { exact: true })).toBeVisible();
-
-  await page.getByRole("link", { name: "Customers" }).waitFor({ state: "visible" });
-  await page.getByRole("link", { name: "Customers" }).click();
-  await expect(page.getByRole("heading", { name: "Customers" })).toBeVisible();
-
-  await page.getByRole("link", { name: "Replies" }).click();
-  await expect(page.getByText("promise", { exact: false }).first()).toBeVisible();
-});
-
-test("approving templates updates the rows and enables the workflow", async ({ page }) => {
-  await login(page, "dev-user@autocollect.local");
-  await page.request.post(`${API_URL}/templates/draft`);
-  const skipOnboarding = page.getByRole("button", { name: "Skip onboarding" });
-  if (await skipOnboarding.count()) await skipOnboarding.click();
-  await page.getByRole("link", { name: "Templates" }).click();
-  await expect(page.getByRole("button", { name: "Approve & enable" }).first()).toBeVisible();
-
-  while (true) {
-    const approveButtons = page.getByRole("button", { name: "Approve & enable" });
-    const pendingCount = await approveButtons.count();
-    if (pendingCount === 0) break;
-    await expect(approveButtons.first()).toBeEnabled();
-    await approveButtons.first().click();
-    await expect(page.getByRole("button", { name: "Approve & enable" })).toHaveCount(pendingCount - 1);
-    await expect(page.getByText("Saved", { exact: true }).first()).toBeVisible();
+test("settings tabs cover workspace, integrations, team, billing, branding and account", async ({ page }) => {
+  await signIn(page, "settings");
+  await page.goto("/settings");
+  for (const tab of ["Workspace", "Integrations", "Team", "Billing", "Branding", "Your account"]) {
+    await page.getByRole("tab", { name: tab }).click();
+    await expect(page.getByRole("tab", { name: tab })).toHaveAttribute("aria-selected", "true");
   }
+  await page.getByRole("tab", { name: "Billing" }).click();
+  await expect(page.getByRole("button", { name: "Choose Growth" })).toBeVisible();
+});
 
-  await expect(page.getByRole("button", { name: "Approve & enable" })).toHaveCount(0);
-  await expect(page.getByText("approved", { exact: true }).first()).toBeVisible();
+test("workspace preferences save and persist", async ({ page }) => {
+  await signIn(page, "prefs");
+  await page.goto("/settings?tab=workspace");
+  await page.getByLabel("Company name").fill("Renamed Studio");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByText("Workspace settings saved")).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel("Company name")).toHaveValue("Renamed Studio");
+});
+
+test("owner can export workspace data and delete the workspace", async ({ page }) => {
+  await signIn(page, "gdpr");
+  await page.goto("/settings?tab=workspace");
+  const name = await page.getByLabel("Company name").inputValue();
+
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export workspace data" }).click();
+  expect((await download).suggestedFilename()).toMatch(/^autocollect-.+\.json$/);
+
+  await page.getByRole("button", { name: "Delete workspace…" }).click();
+  const confirm = page.getByRole("button", { name: "Permanently delete" });
+  await expect(confirm).toBeDisabled();
+  await page.getByLabel(`Type "${name}" to confirm`).fill(name);
+  await page.getByLabel("Your password").fill("dev-password-auto"); // dev-login accounts' password
+  await confirm.click();
+  await expect(page).toHaveURL(/\/login/);
+});
+
+test("seat limit on Starter points to upgrade instead of a failing invite form", async ({ page }) => {
+  await signIn(page, "team");
+  await page.goto("/settings?tab=team");
+  await expect(page.getByText("All seats are in use.")).toBeVisible();
+  await page.getByRole("button", { name: "Upgrade your plan" }).click();
+  await expect(page.getByRole("tab", { name: "Billing" })).toHaveAttribute("aria-selected", "true");
+  // The API enforces the same rule.
+  const res = await page.request.post("/api/invitations", { data: { email: "teammate@example.com" }, headers: { "x-requested-with": "e2e" } });
+  expect((await res.json()).error.code).toBe("SEAT_LIMIT_EXCEEDED");
+});
+
+test("approving templates and enabling the workflow clears the setup banner", async ({ page }) => {
+  await signIn(page, "setup");
+  const templates = await (await page.request.get("/api/templates")).json();
+  for (const t of templates.templates) {
+    await page.request.put(`/api/templates/${t.id}`, { data: { approved: true }, headers: { "x-requested-with": "e2e" } });
+  }
+  await page.goto("/workflows");
+  await page.getByRole("button", { name: "Enable" }).click();
+  await expect(page.getByText("Reminders are live")).toBeVisible();
+  await page.goto("/dashboard");
+  await expect(page.getByText("Finish setup to start collecting automatically")).toHaveCount(0);
+});
+
+test("invoice detail supports pay links and state changes", async ({ page }) => {
+  await signIn(page, "invoice");
+  const ing = await page.request.post("/api/integrations/stripe/dev-event", {
+    data: { invoice: { id: `in_e2e_${Date.now()}`, due_days: -3, customer_name: "Globex", customer_email: "ap@globex.example" } },
+    headers: { "x-requested-with": "e2e" },
+  });
+  expect(ing.ok()).toBeTruthy();
+  await page.goto("/invoices");
+  await page.getByText("Globex").first().click();
+  await expect(page.getByRole("heading", { name: "Globex" })).toBeVisible();
+  await page.getByRole("button", { name: "Pause" }).click();
+  await expect(page.getByText("Reminders paused")).toBeVisible();
+  await page.getByRole("button", { name: "Resume reminders" }).click();
+  await expect(page.getByText("Reminders resumed")).toBeVisible();
+});
+
+test("sign out ends the session", async ({ page }) => {
+  await signIn(page, "logout");
+  await page.goto("/dashboard");
+  await page.getByRole("button", { name: "Sign out" }).first().click();
+  await expect(page).toHaveURL(/\/login/);
+  await page.goto("/dashboard");
+  await expect(page).toHaveURL(/\/login/);
 });

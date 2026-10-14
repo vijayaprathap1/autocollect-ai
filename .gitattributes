@@ -1,0 +1,7 @@
+# Normalise line endings in the repository (Windows checkouts still get CRLF
+# in the working tree when core.autocrlf=true).
+* text=auto eol=lf
+*.sh text eol=lf
+*.png binary
+*.jpg binary
+*.woff2 binary

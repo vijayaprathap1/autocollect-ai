@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { config } from "../../config.js";
+import { isDevLike } from "../../config.js";
 import { requireRole } from "../../plugins/tenant.js";
 import { notFound } from "../../lib/errors.js";
 import { runDunning } from "../workflows/engine.js";
@@ -14,7 +14,7 @@ export async function devRoutes(app: FastifyInstance) {
     "/dev/dunning-run",
     { preHandler: requireRole("admin") },
     async (req) => {
-      if (config.nodeEnv === "production") throw notFound("Disabled in production");
+      if (!isDevLike) throw notFound("Route not found");
       const sent = await runDunning();
       const qbo = await syncAllQuickBooks();
       return { sent, qbo };

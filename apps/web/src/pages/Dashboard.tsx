@@ -16,6 +16,8 @@ const AGING_LABELS: Record<string, string> = {
 export function Dashboard() {
   const me = useMe();
   const tenant = me.tenant;
+  const firstName = me.user.displayName?.trim().split(/\s+/)[0];
+  const greeting = `${new URLSearchParams(window.location.search).get("welcome") ? "Welcome" : "Welcome back"}, ${firstName || tenant?.name || "there"}`;
   const queryClient = useQueryClient();
   const [selectedRange, setSelectedRange] = useState<DashboardRangeKey>("30d");
   const { data, isLoading, isError } = useQuery({
@@ -66,7 +68,7 @@ export function Dashboard() {
   if (isLoading) {
     return (
       <div aria-busy="true">
-        <PageHeader title={`Welcome back, ${tenant.name}`} subtitle="Here's where your cash stands." />
+        <PageHeader title={greeting} subtitle="Here's where your cash stands." />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {["Outstanding", "Overdue", "Recovered (30d)", "Avg DSO", "Credits"].map((label) => (
             <Card key={label} className="min-h-[132px] animate-pulse">
@@ -83,7 +85,7 @@ export function Dashboard() {
   if (isError) {
     return (
       <div>
-        <PageHeader title={`Welcome back, ${tenant.name}`} subtitle="Here's where your cash stands." />
+        <PageHeader title={greeting} subtitle="Here's where your cash stands." />
         <Card className="border-red-200 bg-red-50" role="alert">
           <h2 className="font-semibold text-red-900">Dashboard data unavailable</h2>
           <p className="mt-1 text-sm text-red-700">We couldn't load your latest collection summary. Please try again.</p>
@@ -102,7 +104,7 @@ export function Dashboard() {
     const doneCount = steps.filter((s) => s.done).length;
     return (
       <div>
-        <PageHeader title={`Welcome back, ${tenant.name}`} subtitle="Here's where your cash stands." />
+        <PageHeader title={greeting} subtitle="Here's where your cash stands." />
         {isLoading ? (
           <Card>
             <Spinner label="Loading…" />
@@ -191,7 +193,7 @@ export function Dashboard() {
     <>
       <div>
         <PageHeader
-          title={`Welcome back, ${tenant.name}`}
+          title={greeting}
           subtitle="Here's where your cash stands."
           actions={
             <div className="flex flex-wrap items-center justify-end gap-2">

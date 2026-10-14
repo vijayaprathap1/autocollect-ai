@@ -58,30 +58,58 @@ docs/         Product requirements and product analysis
 
 ## Running locally
 
-Requires Node.js 20+ and PostgreSQL.
+Requires Node.js 20.11+ and Docker (for Postgres on port 5433).
 
 ```bash
 git clone https://github.com/vijayaprathap1/autocollect-ai.git
 cd autocollect-ai
+docker compose up -d                          # Postgres 17
 npm install
-
-# create a .env with DATABASE_URL and the other values read in apps/api/src/config.ts
-
-npm run db:migrate      # apply SQL migrations
-npm run db:roles        # create the Postgres roles used for RLS
-npm run db:seed         # seed a demo org and user
-
-npm run dev             # starts API and web together
+cp apps/api/.env.example apps/api/.env        # Windows: copy apps\api\.env.example apps\api\.env
+npm run db:migrate                            # apply SQL migrations
+npm run db:seed                               # seed a demo org and user
+npm run dev                                   # API :4000 + web :5175
 ```
 
-Other scripts: `npm run typecheck`, `npm run build`, `npm run test:e2e`.
+Open http://localhost:5175 and sign in as `dev-user@autocollect.local` / `dev-password-auto`
+(platform admin: http://localhost:5175/admin/login, `admin@autocollect.local` / `admin123`).
+Every external service falls back to a local mock when its keys are empty, and emails are
+printed to the API console, so every flow works offline.
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | API (watch) + web (Vite) |
+| `npm run typecheck` | TypeScript across all packages |
+| `npm test` | API unit + integration tests (needs the database) |
+| `npm run test:e2e` | Builds the app and runs the Playwright browser tests |
+| `npm run build` | Production build (shared → API → web) |
+| `npm run db:migrate` / `db:roles` / `db:seed` | Schema, least-privilege roles, demo data |
+| `npm run smoke` | Post-deploy smoke test (`BASE=https://… npm run smoke`) |
+
+To run the integration tests with Row-Level Security enforced (as CI does), run
+`npm run db:roles` and point the test run at the restricted roles:
+
+```bash
+DATABASE_URL=postgres://autocollect_app:autocollect_app_dev@localhost:5433/autocollect \
+SERVICE_DATABASE_URL=postgres://autocollect_service:autocollect_service_dev@localhost:5433/autocollect \
+MIGRATION_DATABASE_URL=postgres://autocollect:autocollect_dev@localhost:5433/autocollect \
+npm test
+```
+
+## Deploying
+
+- `docs/GO-LIVE.md`: step-by-step launch checklist (accounts, secrets, DNS, verification)
+- `docs/PRODUCTION.md`: deploy and operate (Vercel or Docker), runbook, security checklist
+- `docs/PRODUCTION-READINESS-REVIEW.md`: audit findings, fixes and roadmap
 
 ## Roadmap
 
-- Transactional email provider in production (currently mocked locally)
-- AI-drafted reminder emails and reply classification
-- Cash-flow forecasting from payment history
-- Multi-org switching
+- Cash-flow forecasting from payment history and promise-to-pay dates
+- Customer-facing payment portal
+- Late fees and early-payment discounts
+- Xero integration
+- Per-workspace sending domains (DKIM) for better deliverability
+- Optional TOTP two-factor sign-in for workspace owners
 
 ## Author
 

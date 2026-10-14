@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { requireRole } from "../../plugins/tenant.js";
-import { badRequest, notFound } from "../../lib/errors.js";
+import { badRequest, notFound, assertUuid } from "../../lib/errors.js";
+import { replyAddressFor } from "../../lib/reply-address.js";
+import { escapeHtml } from "../../lib/email-templates.js";
 import { sendEmail } from "../../lib/postmark.js";
 import { suggestReply } from "../../lib/ai.js";
 
@@ -55,8 +57,8 @@ export async function repliesRoutes(app: FastifyInstance) {
    * Act on a reply: send the suggested reply back, regenerate a new
    * suggestion, or mark it resolved without sending.
    */
-  app.put("/replies/:id", { preHandler: requireRole("admin") }, async (req) => {
-    const { id } = req.params as { id: string };
+  app.put("/replies/:id", { preHandler: requireRole("admin"), config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req) => {
+    const id = assertUuid((req.params as { id: string }).id, "Reply");
     const body = (req.body ?? {}) as { action?: string; body?: string };
     const action = body.action;
     if (!action || !["send", "regenerate", "resolve"].includes(action)) {
@@ -112,11 +114,17 @@ export async function repliesRoutes(app: FastifyInstance) {
     if (!email) throw badRequest("No reply body to send — regenerate or provide one");
     if (!reply.customer_email) throw badRequest("Customer has no email address to reply to");
 
+    if (email.length > 10_000) throw badRequest("Reply is too long");
+    const tenant = await req.db.query<{ name: string }>(`SELECT name FROM tenants WHERE id = $1`, [req.user.tenantId]);
     const { providerMsgId } = await sendEmail({
       to: reply.customer_email,
       subject: reply.external_id ? `Re: invoice ${reply.external_id}` : "Re: your invoice",
       text: email,
-      tag: `reply-${reply.id}`,
+      html: `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.6;white-space:pre-wrap;">${escapeHtml(email)}</div>`,
+      fromName: tenant.rows[0]?.name,
+      replyTo: reply.invoice_id ? replyAddressFor(reply.invoice_id) : undefined,
+      tag: "reply-response",
+      metadata: { tenant_id: req.user.tenantId, reply_id: reply.id },
     });
 
     await req.db.query(

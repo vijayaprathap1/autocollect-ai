@@ -1,52 +1,65 @@
-import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { api } from "@/lib/api";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { verifyEmail } from "@/lib/api";
+import { Spinner } from "@/components/ui";
+import { AuthLayout } from "@/components/auth";
 
 export function VerifyEmail() {
   const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [status, setStatus] = useState<"loading" | "done" | "error">("loading");
   const [error, setError] = useState("");
+  // Tokens are single-use: guard against React StrictMode's double effect run.
+  const started = useRef(false);
 
   useEffect(() => {
+    if (started.current) return;
+    started.current = true;
     const token = params.get("token");
     if (!token) {
       setStatus("error");
-      setError("No verification token provided");
+      setError("This verification link is missing its token.");
       return;
     }
-    api.post("/auth/verify-email", { token })
-      .then(() => setStatus("done"))
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : "Verification failed";
+    verifyEmail(token)
+      .then(async (res) => {
+        if (res.signedIn) {
+          await queryClient.invalidateQueries({ queryKey: ["me"] });
+          navigate("/dashboard?welcome=1", { replace: true });
+          return;
+        }
+        setStatus("done");
+      })
+      .catch((err: Error) => {
         setStatus("error");
-        setError(msg);
+        setError(err.message);
       });
-  }, [params]);
+  }, [params, navigate, queryClient]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg px-4">
-      <div className="w-full max-w-sm text-center">
-        <div className="text-2xl font-bold text-primary mb-2">AutoCollect AI</div>
-        <div className="rounded-xl border border-slate-200 bg-surface p-6 shadow-sm">
-          {status === "loading" && (
-            <p className="text-sm text-muted">Verifying your email…</p>
-          )}
-          {status === "done" && (
-            <>
-              <h2 className="text-lg font-semibold mb-2 text-green-700">Email verified</h2>
-              <p className="text-sm text-muted mb-4">Your email has been verified. You can now use your account.</p>
-              <Link to="/login" className="text-sm text-primary hover:underline">Sign in →</Link>
-            </>
-          )}
-          {status === "error" && (
-            <>
-              <h2 className="text-lg font-semibold mb-2 text-red-700">Verification failed</h2>
-              <p className="text-sm text-muted mb-4">{error}</p>
-              <Link to="/login" className="text-sm text-primary hover:underline">← Back to sign in</Link>
-            </>
-          )}
+    <AuthLayout title={status === "error" ? "Verification failed" : status === "done" ? "Email verified" : "Verifying your email"}>
+      {status === "loading" && <Spinner label="One moment…" />}
+      {status === "done" && (
+        <div className="space-y-3 text-sm text-muted">
+          <p>Your email is confirmed.</p>
+          <Link to="/login" className="font-medium text-primary hover:underline">
+            Sign in →
+          </Link>
         </div>
-      </div>
-    </div>
+      )}
+      {status === "error" && (
+        <div className="space-y-3 text-sm text-muted">
+          <p>{error}</p>
+          <p>
+            Links expire after 24 hours. Sign in and we'll offer to send a fresh one.{" "}
+            <Link to="/login" className="font-medium text-primary hover:underline">
+              Go to sign in
+            </Link>
+          </p>
+        </div>
+      )}
+    </AuthLayout>
   );
 }

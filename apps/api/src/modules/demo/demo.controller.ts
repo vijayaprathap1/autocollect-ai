@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { config } from "../../config.js";
+import { isDevLike } from "../../config.js";
 import { requireRole } from "../../plugins/tenant.js";
 import { notFound } from "../../lib/errors.js";
-import { withTenant } from "../../lib/db.js";
+import { withServiceTenant } from "../../lib/db.js";
 
 /**
  * Dev-only "load demo data" seeder. One click in the UI and a fresh tenant has:
@@ -77,11 +77,11 @@ export async function demoRoutes(app: FastifyInstance) {
     "/demo/seed",
     { preHandler: requireRole("admin") },
     async (req, reply) => {
-      if (config.nodeEnv === "production") throw notFound("Disabled in production");
+      if (!isDevLike) throw notFound("Route not found");
 
       const tenantId = req.user.tenantId;
 
-      await withTenant(tenantId, async (client) => {
+      await withServiceTenant(tenantId, async (client) => {
         // 1) Approved templates (upsert by step_key).
         const templateIds = new Map<string, string>();
         for (const t of DEMO_TEMPLATES) {
