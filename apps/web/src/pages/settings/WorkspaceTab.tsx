@@ -4,7 +4,7 @@ import { Button, Card } from "@/components/ui";
 import { Alert, Field } from "@/components/auth";
 import { useToast } from "@/components/Toast";
 import { useMe } from "@/lib/me";
-import { updateOrganization, type OrganizationSettings } from "@/lib/api";
+import { deleteWorkspace, downloadWorkspaceExport, updateOrganization, type OrganizationSettings } from "@/lib/api";
 
 const COMMON_CURRENCIES = ["usd", "eur", "gbp", "inr", "cad", "aud", "nzd", "sgd", "aed", "chf", "jpy", "zar"];
 
@@ -59,6 +59,7 @@ export function WorkspaceTab() {
   }
 
   return (
+    <div className="grid gap-6">
     <form onSubmit={save} className="grid gap-6">
       {error && <Alert>{error}</Alert>}
       <Card>
@@ -177,5 +178,85 @@ export function WorkspaceTab() {
         </div>
       )}
     </form>
+    {me.user.role === "owner" && <WorkspaceDataCard name={t.name} slug={t.slug} />}
+    </div>
+  );
+}
+
+/** Owner-only: GDPR data export and permanent workspace deletion. */
+function WorkspaceDataCard({ name, slug }: { name: string; slug: string }) {
+  const { showToast } = useToast();
+  const [exporting, setExporting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmName, setConfirmName] = useState("");
+  const [password, setPassword] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function exportData() {
+    setExporting(true);
+    try {
+      await downloadWorkspaceExport(slug);
+    } catch (err) {
+      showToast((err as Error).message, "error");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function remove(e: FormEvent) {
+    e.preventDefault();
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteWorkspace(confirmName, password);
+      window.location.assign("/login");
+    } catch (err) {
+      setError((err as Error).message);
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <Card>
+      <h2 className="mb-1 text-lg font-semibold">Your data</h2>
+      <p className="mb-4 text-sm text-muted">Download everything stored for this workspace: customers, invoices, reminders, replies and activity.</p>
+      <Button type="button" variant="secondary" onClick={exportData} disabled={exporting}>
+        {exporting ? "Preparing…" : "Export workspace data"}
+      </Button>
+
+      <div className="mt-6 border-t border-slate-100 pt-4">
+        <h3 className="font-semibold text-red-700">Delete workspace</h3>
+        <p className="mb-3 text-sm text-muted">
+          Permanently deletes this workspace and all of its data, cancels your subscription and disconnects integrations. This can't be undone.
+        </p>
+        {!confirming ? (
+          <Button type="button" variant="danger" onClick={() => setConfirming(true)}>
+            Delete workspace…
+          </Button>
+        ) : (
+          <form onSubmit={remove} className="grid max-w-md gap-3">
+            {error && <Alert>{error}</Alert>}
+            <Field label={`Type "${name}" to confirm`} value={confirmName} onChange={(e) => setConfirmName(e.target.value)} autoComplete="off" />
+            <Field
+              label="Your password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              hint="Leave blank if you sign in with Google."
+            />
+            <div className="flex gap-2">
+              <Button type="submit" variant="danger" disabled={deleting || confirmName.trim() !== name.trim()}>
+                {deleting ? "Deleting…" : "Permanently delete"}
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => setConfirming(false)} disabled={deleting}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        )}
+      </div>
+    </Card>
   );
 }

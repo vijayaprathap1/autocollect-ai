@@ -54,6 +54,16 @@ describe("email HTML safety", () => {
     expect(html).toContain('href="https://pay.example/a?b=1&amp;c=2"');
   });
 
+  it("identifies the sender in every reminder, even when white-labelled", () => {
+    const base = { subject: "s", body: "Please pay.", payLink: null, companyName: "Acme", hideBranding: true };
+    const plain = reminderEmail(base);
+    expect(plain.html).toContain("Acme has an outstanding invoice");
+    expect(plain.text).toContain("Just reply to this email");
+    const withAddress = reminderEmail({ ...base, businessAddress: "1 Main St\n<Springfield>" });
+    expect(withAddress.html).toContain("1 Main St, &lt;Springfield&gt;");
+    expect(withAddress.text).toContain("Acme, 1 Main St, <Springfield>");
+  });
+
   it("escapeHtml covers quotes", () => {
     expect(escapeHtml(`"'<>&`)).toBe("&quot;&#39;&lt;&gt;&amp;");
   });

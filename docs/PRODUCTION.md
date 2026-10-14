@@ -127,8 +127,9 @@ Steps:
      `CRON_URL=https://<domain>/api/cron/dunning` and `CRON_SECRET`. Vercel Hobby is for
      non-commercial use; a product that bills customers needs Pro.
 
-Limits to know: 60 s per invocation (dunning is time-budgeted and resumes on the next trigger), and rate
-limits are counted per function instance — add a shared store (Redis) before relying on them at scale.
+Limits to know: 60 s per invocation (dunning is time-budgeted and resumes on the next trigger). Rate limits
+are counted per function instance unless `REDIS_URL` is set — create a free Upstash Redis database (Vercel
+Marketplace) and set `REDIS_URL` to its `rediss://` URL so limits hold across instances.
 
 ### 3.4 Verify
 ```bash
@@ -224,6 +225,13 @@ SELECT t.name, w.balance, count(i.*) AS open_invoices
  WHERE w.balance = 0 GROUP BY 1,2 ORDER BY 3 DESC;
 ```
 
+### Data requests (GDPR / CCPA)
+Owners export workspace data (Settings → Workspace → *Export workspace data*, JSON without
+integration credentials) and permanently delete the workspace there; deletion cancels the
+platform subscription and deauthorizes Stripe Connect first. Any user can delete their own
+account under Settings → Your account (owners must delete or transfer their workspaces first).
+Deletions are logged as `workspace deleted` / `user account deleted` in the application logs.
+
 ### Admin console (`/admin/login`)
 Create workspaces (owner gets a set-password email), suspend/reactivate (signs members
 out and pauses reminders), set plans manually, grant/adjust credits, unlock users. Every
@@ -233,8 +241,8 @@ action is written to `audit_log` as `admin:<email>`.
 - Replicas: safe. Dunning, Stripe import, QBO sync and housekeeping each take a DB lease.
 - Connections: each replica uses up to `DB_POOL_MAX` (10) + `DB_SERVICE_POOL_MAX` (5).
   Size Postgres `max_connections` (or use PgBouncer in transaction mode for the app role).
-- Rate limits are per replica (in-memory). For strict global limits add a Redis store
-  to `@fastify/rate-limit`.
+- Rate limits are per replica (in-memory) unless `REDIS_URL` is set, in which case all
+  replicas share counters. If Redis is unreachable the limiter fails open (requests pass).
 - To isolate background work: run one replica with `RUN_SCHEDULER=true` and the rest with `false`.
 
 ### Backups & recovery
@@ -260,3 +268,5 @@ run `db:migrate` (idempotent) and the smoke test.
 - [ ] Backups + PITR enabled and a restore tested
 - [ ] `ERROR_WEBHOOK_URL` wired to an alert channel
 - [ ] `npm audit --omit=dev` clean (CI enforces `high`)
+- [ ] `REDIS_URL` set when running on Vercel or more than one replica
+- [ ] Every workspace sets a business address (Settings → Branding) — shown in reminder footers

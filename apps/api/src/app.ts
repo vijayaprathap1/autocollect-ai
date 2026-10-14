@@ -4,6 +4,7 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
 import rawBody from "fastify-raw-body";
+import { Redis } from "ioredis";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -27,6 +28,7 @@ import { devRoutes } from "./modules/dev/dev.controller.js";
 import { repliesRoutes } from "./modules/replies/replies.controller.js";
 import { membersRoutes } from "./modules/members/members.controller.js";
 import { settingsRoutes } from "./modules/settings/settings.controller.js";
+import { privacyRoutes } from "./modules/privacy/privacy.controller.js";
 import { customerRoutes } from "./modules/customers/customers.controller.js";
 import { cronRoutes } from "./modules/cron/cron.controller.js";
 import { demoRoutes } from "./modules/demo/demo.controller.js";
@@ -187,8 +189,21 @@ export function buildApp() {
 
   // Per-tenant (or per-IP for anonymous traffic) rate limiting. Sensitive
   // auth routes set tighter per-route limits in their own config.
+  // With REDIS_URL the counters are shared by every instance (required for
+  // meaningful limits on serverless); otherwise they live in process memory.
+  const redis =
+    config.rateLimitEnabled && config.redisUrl
+      ? new Redis(config.redisUrl, { connectTimeout: 2_000, commandTimeout: 1_000, maxRetriesPerRequest: 1 })
+      : null;
+  if (redis) {
+    redis.on("error", (err) => app.log.warn({ err: err.message }, "rate-limit redis error"));
+    app.addHook("onClose", async () => {
+      await redis.quit().catch(() => redis.disconnect());
+    });
+  }
   if (config.rateLimitEnabled) void app.register(rateLimit, {
     global: true,
+    ...(redis ? { redis, nameSpace: "autocollect-rl:", skipOnError: true } : {}),
     max: 300,
     timeWindow: "1 minute",
     keyGenerator: (req) => {
@@ -252,6 +267,7 @@ export function buildApp() {
       void api.register(repliesRoutes);
       void api.register(membersRoutes);
       void api.register(settingsRoutes);
+      void api.register(privacyRoutes);
       void api.register(customerRoutes);
       void api.register(cronRoutes);
       void api.register(demoRoutes);

@@ -65,6 +65,8 @@ export const config = {
   trustProxy: trustProxySetting(),
   /** Rate limiting (per tenant / per IP). Disabled only for the automated test suite. */
   rateLimitEnabled: envBool("RATE_LIMIT_ENABLED", nodeEnv !== "test"),
+  /** Shared rate-limit store (e.g. Upstash `rediss://…`). Without it limits are per instance. */
+  redisUrl: env("REDIS_URL"),
 
   // Database
   databaseUrl: env("DATABASE_URL", "postgres://autocollect:autocollect_dev@localhost:5433/autocollect"),

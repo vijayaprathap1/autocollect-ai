@@ -49,6 +49,7 @@ type InvoiceForEngine = {
   send_hour: number;
   skip_weekends: boolean;
   hide_branding: boolean;
+  business_address: string | null;
 };
 
 type WorkflowRow = { id: string; enabled: boolean; steps: WorkflowStep[] };
@@ -69,7 +70,8 @@ const INVOICE_SELECT = `
          c.name AS customer_name, c.email AS customer_email, c.phone AS customer_phone,
          c.sms_opt_out AS customer_sms_opt_out,
          t.name AS tenant_name, t.tone, t.timezone, t.send_hour, t.skip_weekends,
-         COALESCE((t.branding->>'hideBranding')::boolean, FALSE) AS hide_branding
+         COALESCE((t.branding->>'hideBranding')::boolean, FALSE) AS hide_branding,
+         t.branding->>'businessAddress' AS business_address
     FROM invoices i
     JOIN tenants t ON t.id = i.tenant_id
     LEFT JOIN customers c ON c.id = i.customer_id
@@ -291,6 +293,7 @@ async function processOne(inv: InvoiceForEngine, now: Date, force: boolean, ctx:
         payLink: inv.payment_link,
         companyName: inv.tenant_name,
         hideBranding: inv.hide_branding,
+        businessAddress: inv.business_address,
       });
       providerMsgId = (
         await sendEmail({

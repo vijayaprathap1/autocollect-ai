@@ -73,6 +73,7 @@ export type TenantBranding = {
   logoUrl?: string;
   primaryColor?: string;
   hideBranding?: boolean;
+  businessAddress?: string;
 };
 
 export type Role = "owner" | "admin" | "member";
@@ -162,6 +163,23 @@ export type OrganizationSettings = Partial<{
   replyNotifications: boolean;
 }>;
 export const updateOrganization = (body: OrganizationSettings) => api.put<{ ok: boolean }>("/settings/organization", body);
+
+// ─── Privacy (GDPR) ─────────────────────────────────────────────────────────
+
+/** Download the workspace's data as a JSON file. */
+export async function downloadWorkspaceExport(slug: string): Promise<void> {
+  const data = await api.get<unknown>("/settings/export");
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `autocollect-${slug}-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+export const deleteWorkspace = (confirmName: string, password: string) =>
+  api.post<{ ok: boolean }>("/settings/delete-workspace", { confirmName, password: password || undefined });
+export const deleteAccount = (confirmEmail: string, password: string) =>
+  api.post<{ ok: boolean }>("/auth/delete-account", { confirmEmail, password: password || undefined });
 
 export async function updateBranding(branding: Partial<TenantBranding>): Promise<{ branding: TenantBranding; plan: string }> {
   return api.put<{ branding: TenantBranding; plan: string }>("/settings/branding", branding);

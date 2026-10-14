@@ -39,7 +39,13 @@ export function hashToken(token: string): string {
 
 // ─── Password utilities ──────────────────────────────────────────────────
 
-const ARGON_OPTS = { type: argon2.argon2id, memoryCost: 65536, timeCost: 3, parallelism: 1 } as const;
+// The test suite hashes dozens of passwords; full-strength parameters make it
+// take minutes on slower machines. Verification reads parameters from the hash,
+// so test and production hashes stay mutually verifiable.
+const ARGON_OPTS =
+  process.env.NODE_ENV === "test"
+    ? ({ type: argon2.argon2id, memoryCost: 4096, timeCost: 1, parallelism: 1 } as const)
+    : ({ type: argon2.argon2id, memoryCost: 65536, timeCost: 3, parallelism: 1 } as const);
 
 export const passwordSchema = z
   .string()

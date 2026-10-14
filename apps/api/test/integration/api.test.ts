@@ -258,4 +258,40 @@ d("API integration", () => {
     const tenant = await signupAndVerify(`aud-${run}@example.com`, "Aud Co");
     expect((await call(tenant, "GET", "/admin/stats")).status).toBe(403);
   });
+
+  it("exports and permanently deletes a workspace and account (GDPR)", async () => {
+    const email = `gdpr-${run}@example.com`;
+    const jar = await signupAndVerify(email, "Gdpr Co");
+    await call(jar, "POST", "/integrations/stripe/dev-event", {
+      invoice: { id: `in_gdpr_${run}`, due_days: 5, customer_email: `ap-gdpr-${run}@client.example` },
+    });
+    const tenantId = (await call(jar, "GET", "/me")).body.tenant.id as string;
+
+    const exported = await call(jar, "GET", "/settings/export");
+    expect(exported.status).toBe(200);
+    expect(exported.body.workspace.name).toBe("Gdpr Co");
+    expect(exported.body.invoices).toHaveLength(1);
+    expect(exported.body.members[0].email).toBe(email);
+    expect(JSON.stringify(exported.body)).not.toContain("credentials");
+
+    // An owner can't delete their account while they still own a workspace.
+    expect((await call(jar, "POST", "/auth/delete-account", { confirmEmail: email, password: "Str0ngPass!" })).body.error.code).toBe("OWNS_WORKSPACES");
+
+    expect((await call(jar, "POST", "/settings/delete-workspace", { confirmName: "Wrong", password: "Str0ngPass!" })).body.error.code).toBe("CONFIRMATION_MISMATCH");
+    expect((await call(jar, "POST", "/settings/delete-workspace", { confirmName: "Gdpr Co", password: "nope-1234" })).body.error.code).toBe("INVALID_PASSWORD");
+    expect((await call(jar, "POST", "/settings/delete-workspace", { confirmName: "Gdpr Co", password: "Str0ngPass!" })).status).toBe(200);
+
+    const left = await db.servicePool.query<{ n: number }>(
+      `SELECT (SELECT count(*) FROM tenants WHERE id = $1) + (SELECT count(*) FROM invoices WHERE tenant_id = $1)
+            + (SELECT count(*) FROM customers WHERE tenant_id = $1) + (SELECT count(*) FROM audit_log WHERE tenant_id = $1) AS n`,
+      [tenantId],
+    );
+    expect(Number(left.rows[0].n)).toBe(0);
+    expect((await call(jar, "GET", "/me")).status).toBe(401); // workspace sessions are gone
+
+    const again = new Jar();
+    expect((await call(again, "POST", "/auth/login", { email, password: "Str0ngPass!" }, ORIGIN)).status).toBe(200);
+    expect((await call(again, "POST", "/auth/delete-account", { confirmEmail: email, password: "Str0ngPass!" })).status).toBe(200);
+    expect((await db.servicePool.query(`SELECT 1 FROM users WHERE email = $1`, [email])).rowCount).toBe(0);
+  });
 });

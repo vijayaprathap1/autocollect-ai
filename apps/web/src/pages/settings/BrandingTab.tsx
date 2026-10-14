@@ -16,6 +16,7 @@ export function BrandingTab() {
   const [logoUrl, setLogoUrl] = useState(initial.logoUrl ?? "");
   const [primaryColor, setPrimaryColor] = useState(initial.primaryColor ?? "");
   const [hideBranding, setHideBranding] = useState(initial.hideBranding ?? false);
+  const [businessAddress, setBusinessAddress] = useState(initial.businessAddress ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,7 +24,7 @@ export function BrandingTab() {
     setBusy(true);
     setError(null);
     try {
-      await updateBranding({ appName, logoUrl, primaryColor, ...(plan === "agency" ? { hideBranding } : {}) });
+      await updateBranding({ appName, logoUrl, primaryColor, businessAddress, ...(plan === "agency" ? { hideBranding } : {}) });
       await queryClient.invalidateQueries({ queryKey: ["me"] });
       showToast("Branding saved", "success");
     } catch (err) {
@@ -50,6 +51,14 @@ export function BrandingTab() {
             <input type="color" aria-label="Pick color" value={/^#[0-9a-f]{6}$/i.test(primaryColor) ? primaryColor : "#2563eb"} onChange={(e) => setPrimaryColor(e.target.value)} className="h-9 w-9 rounded border border-slate-300" />
           </div>
         </div>
+        <Field
+          label="Business address"
+          value={businessAddress}
+          onChange={(e) => setBusinessAddress(e.target.value)}
+          placeholder="123 Main St, Springfield, IL 62701, USA"
+          maxLength={300}
+          hint="Shown in the footer of reminder emails so customers know who is contacting them."
+        />
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={hideBranding} disabled={plan !== "agency"} onChange={(e) => setHideBranding(e.target.checked)} />
           <span>

@@ -15,7 +15,7 @@ snooze them, and your team is notified.
 | `apps/web` | React 19 · Vite 6 · TanStack Query · Tailwind |
 | `packages/shared` | Shared domain types |
 | `e2e/` | Playwright browser tests |
-| `docs/` | `PRODUCTION.md` (deploy & operate), `PRODUCTION-READINESS-REVIEW.md` (audit & roadmap) |
+| `docs/` | `GO-LIVE.md` (step-by-step launch checklist), `PRODUCTION.md` (deploy & operate), `PRODUCTION-READINESS-REVIEW.md` (audit & roadmap) |
 
 ## Quick start (local)
 

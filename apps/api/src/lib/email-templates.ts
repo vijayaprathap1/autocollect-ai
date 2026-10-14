@@ -190,6 +190,7 @@ export function reminderEmail(params: {
   payLink: string | null;
   companyName: string;
   hideBranding: boolean;
+  businessAddress?: string | null;
 }): Rendered {
   const paragraphs = params.body
     .split(/\n{2,}/)
@@ -203,6 +204,14 @@ export function reminderEmail(params: {
   const poweredBy = params.hideBranding
     ? ""
     : `<div style="font-size:11px;color:#94a3b8;margin-top:24px;text-align:center;">Sent with ${APP_NAME}</div>`;
-  const html = wrap(params.subject, `${paragraphs}${cta}${poweredBy}`, { brand: params.companyName, footer: false });
-  return { subject: params.subject, html, text: params.body };
+  // Sender identification + a contact route, required in every customer email
+  // (also when white-labelled). Replies reach the workspace's reply inbox.
+  const address = params.businessAddress?.trim() || "";
+  const notice = `You're receiving this because ${params.companyName} has an outstanding invoice addressed to you. Questions, or think this was sent in error? Just reply to this email.`;
+  const senderFooter = `<div style="font-size:11px;color:#94a3b8;margin-top:24px;text-align:center;line-height:1.5;">${escapeHtml(notice)}${
+    address ? `<br/>${escapeHtml(params.companyName)} · ${escapeHtml(address).replace(/\n/g, ", ")}` : ""
+  }</div>`;
+  const html = wrap(params.subject, `${paragraphs}${cta}${senderFooter}${poweredBy}`, { brand: params.companyName, footer: false });
+  const text = `${params.body}\n\n--\n${notice}${address ? `\n${params.companyName}, ${address.replace(/\n/g, ", ")}` : ""}`;
+  return { subject: params.subject, html, text };
 }

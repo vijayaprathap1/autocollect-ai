@@ -104,14 +104,14 @@ Xero integration, SMS/WhatsApp escalation UX, cash-forecast reporting.
 2. Run `npm run db:migrate` then `npm run db:roles`; run the app as `autocollect_app` / `autocollect_service`.
 3. Build and run the Docker image once (`docker build .`) — the Dockerfile was written but not built in this environment (no Docker daemon); CI builds it on every push.
 4. Enable backups + PITR; wire `ERROR_WEBHOOK_URL` to an alert channel.
-5. Legal: Terms, Privacy Policy, DPA, and an unsubscribe/contact line in reminder footers (CAN-SPAM/GDPR).
+5. Legal: have Terms, Privacy Policy and a DPA reviewed by counsel. *(Done in code: every reminder footer identifies the sender, says why the email was sent and how to respond, and shows the workspace's business address when set.)*
 
 ### Next 30 days (should)
-- Redis-backed rate limiting when running >1 replica.
+- ~~Redis-backed rate limiting when running >1 replica.~~ Done — set `REDIS_URL`.
 - OpenTelemetry traces + metrics (sends, failures, webhook lag); uptime monitor on `/api/ready`.
 - Email change flow with re-verification; optional TOTP 2FA for owners.
-- Data export and account deletion (GDPR).
-- Remove the unused `plugins/csrf.ts` and its dependencies.
+- ~~Data export and account deletion (GDPR).~~ Done — self-service in Settings.
+- ~~Remove the unused `plugins/csrf.ts` and its dependencies.~~ Done.
 
 ### Next quarter (could)
 - Customer-facing payment portal; late fees / early-payment discounts; Xero integration.

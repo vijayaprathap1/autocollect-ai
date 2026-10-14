@@ -213,7 +213,7 @@ export function Terms() {
       title: "Suspension and termination",
       body: (
         <>
-          <p>You may stop using the service and ask us to delete your workspace at any time by emailing <Mail />.</p>
+          <p>You may stop using the service at any time. Workspace owners can export their data and permanently delete the workspace under Settings &rarr; Workspace, or ask us to do it by emailing <Mail />.</p>
           <p>
             We may suspend or close a workspace that breaks these terms, puts the service or other customers at risk, or has unpaid fees. Where
             practical we will warn you first and give you a chance to fix the problem.
@@ -465,7 +465,8 @@ export function Privacy() {
             Digital Personal Data Protection Act.
           </p>
           <p>
-            To use any of these rights, email <Mail />. We respond within 30 days. If your data is in the service because a business sent you a
+            Account holders can export workspace data and delete their workspace or account themselves in Settings. To use any other right, email{" "}
+            <Mail />. We respond within 30 days. If your data is in the service because a business sent you a
             reminder, we will pass your request to that business. You also have the right to complain to your local data-protection authority.
           </p>
         </>

@@ -10,6 +10,8 @@ export type TenantBranding = {
   logoUrl?: string;
   primaryColor?: string;
   hideBranding?: boolean;
+  /** Postal address shown in the footer of customer reminder emails. */
+  businessAddress?: string;
 };
 
 const organizationSchema = z
@@ -72,6 +74,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         logoUrl: z.union([z.literal(""), z.string().trim().url().max(500).regex(/^https:\/\//, "Logo URL must use https://")]).optional(),
         primaryColor: z.union([z.literal(""), z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "Use a hex color like #2563EB")]).optional(),
         hideBranding: z.boolean().optional(),
+        businessAddress: z.string().trim().max(300).optional(),
       })
       .parse(req.body ?? {});
 
@@ -85,7 +88,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     ]);
     const merged: TenantBranding = { ...(current.rows[0]?.branding ?? {}) };
     // Empty string clears a field.
-    for (const key of ["appName", "logoUrl", "primaryColor"] as const) {
+    for (const key of ["appName", "logoUrl", "primaryColor", "businessAddress"] as const) {
       const v = body[key];
       if (v === undefined) continue;
       if (v === "") delete merged[key];

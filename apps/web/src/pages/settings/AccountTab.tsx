@@ -4,7 +4,7 @@ import { Button, Card, Spinner } from "@/components/ui";
 import { Alert, Field, PasswordField, passwordIssues } from "@/components/auth";
 import { useToast } from "@/components/Toast";
 import { useMe } from "@/lib/me";
-import { changePassword, getSessions, revokeOtherSessions, revokeSession, updateProfile } from "@/lib/api";
+import { changePassword, deleteAccount, getSessions, revokeOtherSessions, revokeSession, updateProfile } from "@/lib/api";
 import { describeUserAgent, timeAgo } from "@/lib/format";
 
 function ProfileCard() {
@@ -149,6 +149,65 @@ export function AccountTab() {
       <ProfileCard />
       <PasswordCard />
       <SessionsCard />
+      <DeleteAccountCard />
     </div>
+  );
+}
+
+function DeleteAccountCard() {
+  const me = useMe();
+  const [confirming, setConfirming] = useState(false);
+  const [confirmEmail, setConfirmEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (me.user.isSuperAdmin) return null;
+
+  async function remove(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteAccount(confirmEmail, password);
+      window.location.assign("/login");
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <h2 className="mb-1 text-lg font-semibold text-red-700">Delete account</h2>
+      <p className="mb-3 text-sm text-muted">
+        Permanently deletes your login and removes you from every workspace. If you own a workspace, delete it or transfer ownership first.
+      </p>
+      {!confirming ? (
+        <Button type="button" variant="danger" onClick={() => setConfirming(true)}>
+          Delete my account…
+        </Button>
+      ) : (
+        <form onSubmit={remove} className="grid max-w-md gap-3">
+          {error && <Alert>{error}</Alert>}
+          <Field label={`Type ${me.user.email} to confirm`} value={confirmEmail} onChange={(e) => setConfirmEmail(e.target.value)} autoComplete="off" />
+          <Field
+            label="Your password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            hint="Leave blank if you sign in with Google."
+          />
+          <div className="flex gap-2">
+            <Button type="submit" variant="danger" disabled={busy || confirmEmail.trim().toLowerCase() !== me.user.email.toLowerCase()}>
+              {busy ? "Deleting…" : "Permanently delete"}
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setConfirming(false)} disabled={busy}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
+    </Card>
   );
 }

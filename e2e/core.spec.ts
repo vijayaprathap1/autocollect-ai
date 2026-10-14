@@ -39,6 +39,24 @@ test("workspace preferences save and persist", async ({ page }) => {
   await expect(page.getByLabel("Company name")).toHaveValue("Renamed Studio");
 });
 
+test("owner can export workspace data and delete the workspace", async ({ page }) => {
+  await signIn(page, "gdpr");
+  await page.goto("/settings?tab=workspace");
+  const name = await page.getByLabel("Company name").inputValue();
+
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export workspace data" }).click();
+  expect((await download).suggestedFilename()).toMatch(/^autocollect-.+\.json$/);
+
+  await page.getByRole("button", { name: "Delete workspace…" }).click();
+  const confirm = page.getByRole("button", { name: "Permanently delete" });
+  await expect(confirm).toBeDisabled();
+  await page.getByLabel(`Type "${name}" to confirm`).fill(name);
+  await page.getByLabel("Your password").fill("dev-password-auto"); // dev-login accounts' password
+  await confirm.click();
+  await expect(page).toHaveURL(/\/login/);
+});
+
 test("seat limit on Starter points to upgrade instead of a failing invite form", async ({ page }) => {
   await signIn(page, "team");
   await page.goto("/settings?tab=team");
