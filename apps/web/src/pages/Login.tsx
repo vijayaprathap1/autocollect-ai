@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiClientError, login, resendVerification } from "@/lib/api";
 import { Button } from "@/components/ui";
-import { Alert, AuthLayout, Field, GoogleButton, PasswordField, oauthErrorMessage } from "@/components/auth";
+import { Alert, AuthLayout, Field, PasswordField, SocialSignIn, oauthErrorMessage } from "@/components/auth";
 
 export function Login() {
   const navigate = useNavigate();
@@ -100,7 +100,7 @@ export function Login() {
           {loading ? "Signing in…" : "Sign in"}
         </Button>
       </form>
-      <GoogleButton />
+      <SocialSignIn />
     </AuthLayout>
   );
 }

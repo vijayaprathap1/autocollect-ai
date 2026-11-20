@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { signup, resendVerification } from "@/lib/api";
 import { Button } from "@/components/ui";
-import { Alert, AuthLayout, Field, GoogleButton, PasswordField, passwordIssues } from "@/components/auth";
+import { Alert, AuthLayout, Field, PasswordField, SocialSignIn, passwordIssues } from "@/components/auth";
 
 export function SignUp() {
   const [name, setName] = useState("");
@@ -104,7 +104,7 @@ export function SignUp() {
           <Link to="/privacy" className="font-medium text-primary hover:underline">Privacy Policy</Link>.
         </p>
       </form>
-      <GoogleButton label="Sign up with Google" />
+      <SocialSignIn mode="signup" />
     </AuthLayout>
   );
 }

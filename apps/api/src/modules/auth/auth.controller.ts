@@ -24,7 +24,7 @@ import {
   type UserRecord,
 } from "../../lib/auth.js";
 import { ApiError, badRequest, notFound, unauthorized, assertUuid } from "../../lib/errors.js";
-import { sendEmail } from "../../lib/postmark.js";
+
 import {
   passwordResetEmail,
   emailVerificationEmail,
@@ -34,30 +34,9 @@ import {
 import { googleEnabled } from "../../lib/oauth.js";
 import { isValidTimeZone } from "../../lib/schedule.js";
 import { googleAuthRoutes } from "./google.controller.js";
+import { stripeLoginEnabled, stripeLoginRoutes } from "./stripe-login.controller.js";
 
-/** Fire-and-log: auth emails must never turn a successful action into a 500. */
-async function sendAccountEmail(
-  req: FastifyRequest,
-  to: string,
-  tmpl: { subject: string; text: string; html: string },
-  tag: string,
-): Promise<void> {
-  try {
-    await sendEmail({ to, subject: tmpl.subject, text: tmpl.text, html: tmpl.html, tag });
-  } catch (err) {
-    req.log.error({ err, tag }, "failed to send account email");
-  }
-}
-
-async function issueVerificationToken(userId: string): Promise<string> {
-  const raw = generateToken();
-  await servicePool.query(`DELETE FROM email_verification_tokens WHERE user_id = $1 AND used_at IS NULL`, [userId]);
-  await servicePool.query(
-    `INSERT INTO email_verification_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
-    [userId, hashToken(raw), new Date(Date.now() + config.verifyTokenTtlHours * 3600_000).toISOString()],
-  );
-  return raw;
-}
+import { issueVerificationToken, sendAccountEmail } from "../../lib/account-emails.js";
 
 async function issueResetToken(userId: string, ttlMinutes = config.resetTokenTtlMinutes): Promise<string> {
   const raw = generateToken();
@@ -128,6 +107,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.get("/auth/providers", { config: { public: true } }, async () => ({
     password: true,
     google: googleEnabled,
+    stripe: stripeLoginEnabled(),
     signup: true,
   }));
 
@@ -477,4 +457,7 @@ export async function authRoutes(app: FastifyInstance) {
 
   // ─── Google OAuth ────────────────────────────────────────────────────
   void app.register(googleAuthRoutes);
+
+  // ─── Stripe sign-in ("Continue with Stripe") ─────────────────────────
+  void app.register(stripeLoginRoutes);
 }

@@ -94,6 +94,35 @@ test.describe("signed-out flows", () => {
     await expect(google).toHaveAttribute("href", /\/api\/auth\/google$/);
   });
 
+  test("Continue with Stripe signs up, lands on the welcome panel and starts reminders in one click", async ({ page }) => {
+    await page.goto("/signup");
+    const stripe = page.getByRole("link", { name: "Sign up with Stripe" });
+    await expect(stripe).toBeVisible();
+    await expect(stripe).toHaveAttribute("href", /\/api\/auth\/stripe$/);
+
+    // The dev server has no Stripe keys, so /api/auth/stripe runs the mock consent
+    // round trip. Give each run its own mock Stripe account and email.
+    const id = `e2e${Date.now()}`;
+    await page.route("**/api/auth/stripe/callback?**", (route) => {
+      const url = new URL(route.request().url());
+      url.searchParams.set("dev_account", `acct_${id}`);
+      url.searchParams.set("dev_email", `${id}@stripe-e2e.example`);
+      url.searchParams.set("dev_name", "E2E Stripe Co");
+      return route.continue({ url: url.toString() });
+    });
+    await stripe.click();
+
+    await expect(page).toHaveURL(/\/dashboard\?.*welcome=stripe/);
+    await expect(page.getByRole("heading", { name: "Your Stripe account is connected" })).toBeVisible();
+    await page.getByRole("button", { name: "Approve default reminders & start" }).click();
+    await expect(page.getByText("Reminders are on.")).toBeVisible();
+  });
+
+  test("Stripe sign-in errors are explained on the login page", async ({ page }) => {
+    await page.goto("/login?error=stripe_email_exists");
+    await expect(page.getByRole("alert")).toContainText("already uses your Stripe email");
+  });
+
   test("unknown routes show a 404 page", async ({ page }) => {
     await page.goto("/definitely-not-a-page");
     await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();

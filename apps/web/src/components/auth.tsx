@@ -157,7 +157,33 @@ export function PasswordField({
   );
 }
 
-/** Rendered only when Google sign-in is configured on the server. */
+/**
+ * "or" divider plus every sign-in option the server has configured (Google,
+ * Stripe). Renders nothing when neither is available.
+ */
+export function SocialSignIn({ mode = "signin" }: { mode?: "signin" | "signup" }) {
+  const { data } = useQuery({ queryKey: ["auth-providers"], queryFn: getProviders, staleTime: 5 * 60_000 });
+  if (!data?.google && !data?.stripe) return null;
+  const verb = mode === "signup" ? "Sign up" : "Continue";
+  return (
+    <>
+      <div className="my-4 flex items-center gap-3 text-xs text-muted">
+        <span className="h-px flex-1 bg-slate-200" /> or <span className="h-px flex-1 bg-slate-200" />
+      </div>
+      <div className="space-y-2">
+        {data.google && <GoogleLink label={`${verb} with Google`} />}
+        {data.stripe && <StripeLink label={`${verb} with Stripe`} />}
+      </div>
+      {data.stripe && (
+        <p className="mt-2 text-center text-xs text-muted">
+          With Stripe, we import your open invoices and stay in sync as they change.
+        </p>
+      )}
+    </>
+  );
+}
+
+/** Kept for existing callers; prefer SocialSignIn. */
 export function GoogleButton({ label = "Continue with Google" }: { label?: string }) {
   const { data } = useQuery({ queryKey: ["auth-providers"], queryFn: getProviders, staleTime: 5 * 60_000 });
   if (!data?.google) return null;
@@ -166,6 +192,32 @@ export function GoogleButton({ label = "Continue with Google" }: { label?: strin
       <div className="my-4 flex items-center gap-3 text-xs text-muted">
         <span className="h-px flex-1 bg-slate-200" /> or <span className="h-px flex-1 bg-slate-200" />
       </div>
+      <GoogleLink label={label} />
+    </>
+  );
+}
+
+function StripeLink({ label }: { label: string }) {
+  return (
+    <a
+      href={apiUrl("/auth/stripe")}
+      className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#635BFF] bg-[#635BFF] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#5249e6]"
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+        <rect width="24" height="24" rx="5" fill="#fff" />
+        <path
+          fill="#635BFF"
+          d="M11.1 9.4c0-.6.5-.9 1.3-.9 1.2 0 2.7.4 3.9 1V6.1a10.3 10.3 0 0 0-3.9-.7c-3.2 0-5.3 1.7-5.3 4.5 0 4.4 6 3.7 6 5.6 0 .7-.6 1-1.5 1-1.3 0-3-.5-4.3-1.3v3.6c1.5.6 2.9.9 4.3.9 3.3 0 5.6-1.6 5.6-4.5 0-4.7-6.1-3.9-6.1-5.8z"
+        />
+      </svg>
+      {label}
+    </a>
+  );
+}
+
+function GoogleLink({ label }: { label: string }) {
+  return (
+    <>
       <a
         href={apiUrl("/auth/google")}
         className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-slate-50"
@@ -188,6 +240,15 @@ const OAUTH_ERRORS: Record<string, string> = {
   google_state: "Your sign-in link expired. Please try again.",
   google_unverified: "Your Google email address isn't verified.",
   google_unavailable: "Google sign-in isn't available right now.",
+  stripe_cancelled: "Stripe sign-in was cancelled.",
+  stripe_failed: "Stripe sign-in failed. Please try again.",
+  stripe_state: "Your sign-in link expired. Please try again.",
+  stripe_unavailable: "Stripe sign-in isn't available right now.",
+  stripe_no_email: "Your Stripe account has no email address. Add one in Stripe, or sign up with email instead.",
+  stripe_email_exists:
+    "An AutoCollect account already uses your Stripe email. Sign in with that account, then connect Stripe in Settings → Integrations.",
+  stripe_account_in_use:
+    "This Stripe account is already connected to another AutoCollect workspace. Ask its owner to invite you, or sign in to that workspace.",
   admin_use_password: "Platform admins must sign in with a password on the admin page.",
   account_suspended: "This account has been suspended.",
 };

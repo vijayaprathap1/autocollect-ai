@@ -118,7 +118,11 @@ export type MeResponse = {
 
 export const fetchMe = () => api.get<MeResponse>("/me");
 
-export type Providers = { password: boolean; google: boolean; signup: boolean };
+export type Providers = { password: boolean; google: boolean; stripe?: boolean; signup: boolean };
+
+/** Approve the default reminder templates and turn the default workflow on. */
+export const startReminders = () =>
+  api.post<{ ok: boolean; workflowId: string; steps: number; templatesApproved: number }>("/onboarding/start-reminders", {});
 export const getProviders = () => api.get<Providers>("/auth/providers");
 
 export const login = (email: string, password: string, rememberMe: boolean) =>

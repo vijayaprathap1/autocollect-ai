@@ -5,6 +5,7 @@ import { Button, Card, EmptyState, PageHeader, Spinner, OnboardingModal, shouldS
 import { getDashboard, seedDemo, type DashboardRangeKey } from "@/lib/api";
 import { formatDate, formatMoney, timeAgo } from "@/lib/format";
 import { useMe } from "@/lib/me";
+import { StripeWelcome } from "@/components/StripeWelcome";
 
 const AGING_LABELS: Record<string, string> = {
   "0-30": "0–30 days",
@@ -35,7 +36,9 @@ export function Dashboard() {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    if (tenant && shouldShowOnboarding(me)) {
+    // After "Continue with Stripe" the welcome panel is the onboarding; don't stack the modal on it.
+    const fromStripe = new URLSearchParams(window.location.search).get("welcome") === "stripe";
+    if (tenant && shouldShowOnboarding(me) && !fromStripe) {
       setShowOnboarding(true);
     }
   }, [tenant, me]);
@@ -105,6 +108,7 @@ export function Dashboard() {
     return (
       <div>
         <PageHeader title={greeting} subtitle="Here's where your cash stands." />
+        <StripeWelcome />
         {isLoading ? (
           <Card>
             <Spinner label="Loading…" />
@@ -217,6 +221,7 @@ export function Dashboard() {
         <p className="-mt-3 mb-5 text-xs text-muted" role="status">
           Showing {rangeLabels[selectedRange]} · Data as of {formatDate(data.range.asOf)} · Updated {timeAgo(data.range.lastUpdatedAt)}
         </p>
+        <StripeWelcome />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Card className="min-h-[132px]">

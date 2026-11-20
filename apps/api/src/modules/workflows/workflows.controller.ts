@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireRole } from "../../plugins/tenant.js";
 import { badRequest, notFound, assertUuid } from "../../lib/errors.js";
 import { draftReminderTemplates } from "../../lib/ai.js";
-import { linkDefaultWorkflowSteps } from "../../lib/default-sequence.js";
+import { ensureDefaultTemplates, linkDefaultWorkflowSteps } from "../../lib/default-sequence.js";
 import { smsEnabled } from "../../lib/sms.js";
 import { isProduction } from "../../config.js";
 import { unknownPlaceholders, TEMPLATE_VARIABLES } from "./render.js";
@@ -198,5 +198,61 @@ export async function workflowRoutes(app: FastifyInstance) {
         unknownPlaceholders: unknownPlaceholders(`${t.subject}\n${t.body}`),
       },
     };
+  });
+
+  /**
+   * One click from onboarding (e.g. right after "Continue with Stripe"):
+   * approve the default workflow's templates and turn the workflow on, so
+   * imported invoices start getting reminders. Admin-only and audited; a
+   * template with an unknown {placeholder} blocks it rather than sending a
+   * broken email.
+   */
+  app.post("/onboarding/start-reminders", { preHandler: requireRole("admin") }, async (req) => {
+    const tenantId = req.user.tenantId;
+    const loadDefault = async () =>
+      (
+        await req.db.query<{ id: string; steps: WorkflowStep[] | null }>(
+          `SELECT id, steps FROM workflows WHERE tenant_id = $1 AND is_default = TRUE ORDER BY created_at LIMIT 1`,
+          [tenantId],
+        )
+      ).rows[0];
+    let wf = await loadDefault();
+    if (!wf) throw notFound("No default reminder workflow");
+    if (!Array.isArray(wf.steps) || wf.steps.length === 0) {
+      await ensureDefaultTemplates(req.db, tenantId);
+      await linkDefaultWorkflowSteps(req.db, tenantId);
+      wf = (await loadDefault()) ?? wf;
+    }
+    const steps = Array.isArray(wf.steps) ? wf.steps : [];
+    const templateIds = [...new Set(steps.map((s) => s.templateId).filter((t): t is string => Boolean(t)))];
+    if (templateIds.length === 0) throw badRequest("The reminder sequence has no templates yet", "NO_TEMPLATES");
+
+    const templates = await req.db.query<{ id: string; subject: string; body: string }>(
+      `SELECT id, subject, body FROM templates WHERE tenant_id = $1 AND id = ANY($2::uuid[])`,
+      [tenantId, templateIds],
+    );
+    const broken = templates.rows.find((tpl) => unknownPlaceholders(`${tpl.subject}\n${tpl.body}`).length > 0);
+    if (broken) {
+      throw badRequest(`Fix the unknown placeholder in "${broken.subject.slice(0, 60)}" before starting reminders`, "TEMPLATE_INVALID");
+    }
+
+    const approved = await req.db.query(
+      `UPDATE templates SET approved = TRUE WHERE tenant_id = $1 AND id = ANY($2::uuid[]) AND approved = FALSE`,
+      [tenantId, templateIds],
+    );
+    await req.db.query(`UPDATE workflows SET enabled = TRUE WHERE id = $1 AND tenant_id = $2`, [wf.id, tenantId]);
+    // Same as enabling on the Workflows page: let the engine recompute send times.
+    await req.db.query(
+      `UPDATE invoices SET next_step_due_at = NULL
+        WHERE tenant_id = $1 AND status = 'open' AND next_step_index < 9999
+          AND (workflow_id = $2 OR workflow_id IS NULL)`,
+      [tenantId, wf.id],
+    );
+    await req.db.query(`INSERT INTO audit_log (tenant_id, actor, action, detail) VALUES ($1, $2, 'reminders_started', $3::jsonb)`, [
+      tenantId,
+      req.user.email,
+      JSON.stringify({ workflow_id: wf.id, templates_approved: approved.rowCount ?? 0, steps: steps.length }),
+    ]);
+    return { ok: true, workflowId: wf.id, steps: steps.length, templatesApproved: approved.rowCount ?? 0 };
   });
 }

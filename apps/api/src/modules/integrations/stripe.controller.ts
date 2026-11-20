@@ -3,10 +3,10 @@ import type Stripe from "stripe";
 import { config, isDevLike } from "../../config.js";
 import { requireRole } from "../../plugins/tenant.js";
 import { stripe, stripeEnabled, stripeOAuthRedirectUri, constructWebhookEvent } from "../../lib/stripe.js";
-import { servicePool, withServiceTransaction } from "../../lib/db.js";
+import { servicePool, withServiceTransaction, type Queryable } from "../../lib/db.js";
 import { badRequest, notFound } from "../../lib/errors.js";
 import { decodeState, encodeState } from "../../lib/oauth.js";
-import { extractCookieToken } from "../../lib/auth.js";
+import { extractCookieToken, hashToken } from "../../lib/auth.js";
 import { smsEnabled } from "../../lib/sms.js";
 import { handleCheckoutCompleted, handleSubscriptionInvoicePaid, invoiceSubscriptionId, syncSubscription } from "../../lib/subscriptions.js";
 import {
@@ -19,7 +19,63 @@ import {
 } from "./ingest.service.js";
 import { claimWebhookEvent, completeWebhookEvent, failWebhookEvent } from "../../lib/webhook-events.js";
 
-const MOCK_ACCOUNT_ID = "acct_dev_mock";
+export const MOCK_ACCOUNT_ID = "acct_dev_mock";
+
+export type StripeConnectCredentials = { stripe_account_id: string; scope?: string; livemode?: boolean; connected_at: string };
+
+/** The Stripe account is already connected to a different workspace. */
+export class StripeAccountInUseError extends Error {
+  constructor() {
+    super("account_in_use");
+  }
+}
+
+/**
+ * Store a Stripe Connect grant for a workspace (run inside a service
+ * transaction). Shared by Settings → Connect Stripe and "Continue with Stripe".
+ * A real account can belong to only one workspace; the dev mock account moves
+ * to the latest workspace that connects it.
+ */
+export async function connectStripeAccount(c: Queryable, tenantId: string, credentials: StripeConnectCredentials): Promise<void> {
+  const owner = await c.query<{ tenant_id: string }>(
+    `SELECT tenant_id FROM integrations WHERE source = 'stripe' AND status = 'active'
+        AND credentials->>'stripe_account_id' = $1 AND tenant_id <> $2`,
+    [credentials.stripe_account_id, tenantId],
+  );
+  if (owner.rows.length) {
+    if (credentials.stripe_account_id !== MOCK_ACCOUNT_ID) throw new StripeAccountInUseError();
+    await c.query(
+      `UPDATE integrations SET status = 'disconnected' WHERE source = 'stripe' AND credentials->>'stripe_account_id' = $1 AND tenant_id <> $2`,
+      [MOCK_ACCOUNT_ID, tenantId],
+    );
+  }
+  await c.query(
+    `INSERT INTO integrations (tenant_id, source, status, credentials, settings)
+     VALUES ($1, 'stripe', 'active', $2::jsonb, '{}'::jsonb)
+     ON CONFLICT (tenant_id, source) DO UPDATE
+       SET status = 'active', credentials = EXCLUDED.credentials, historical_sync_completed_at = NULL,
+           settings = COALESCE(integrations.settings, '{}'::jsonb) - 'backfill_cursor', updated_at = now()`,
+    [tenantId, JSON.stringify(credentials)],
+  );
+  await c.query(`INSERT INTO audit_log (tenant_id, actor, action, detail) VALUES ($1, 'stripe', 'stripe_connected', $2::jsonb)`, [
+    tenantId,
+    JSON.stringify({ account: credentials.stripe_account_id, livemode: credentials.livemode ?? false }),
+  ]);
+}
+
+/**
+ * Let `userId` sign in with this Stripe account. First link wins: an account
+ * already linked to someone else is left alone. The shared dev mock account is
+ * never linked.
+ */
+export async function linkStripeIdentity(c: Queryable, userId: string, stripeAccountId: string): Promise<void> {
+  if (stripeAccountId === MOCK_ACCOUNT_ID) return;
+  await c.query(
+    `INSERT INTO user_identities (user_id, provider, subject) VALUES ($1, 'stripe', $2)
+     ON CONFLICT (provider, subject) DO NOTHING`,
+    [userId, stripeAccountId],
+  );
+}
 
 function webUrl(path: string): string {
   return `${config.webOrigin.split(",")[0].replace(/\/$/, "")}${path}`;
@@ -194,7 +250,7 @@ export async function stripeRoutes(app: FastifyInstance) {
       return settingsRedirect(reply, { stripe: "error", reason: "expired" });
     }
 
-    let credentials: { stripe_account_id: string; scope?: string; livemode?: boolean; connected_at: string };
+    let credentials: StripeConnectCredentials;
     try {
       if (stripeEnabled) {
         const token = await stripe!.oauth.token({ grant_type: "authorization_code", code: q.code });
@@ -216,36 +272,17 @@ export async function stripeRoutes(app: FastifyInstance) {
       return settingsRedirect(reply, { stripe: "error", reason: "exchange_failed" });
     }
 
-    const owner = await servicePool.query<{ tenant_id: string }>(
-      `SELECT tenant_id FROM integrations WHERE source = 'stripe' AND status = 'active'
-          AND credentials->>'stripe_account_id' = $1 AND tenant_id <> $2`,
-      [credentials.stripe_account_id, tenantId],
-    );
-    if (owner.rows.length && credentials.stripe_account_id !== MOCK_ACCOUNT_ID) {
-      return settingsRedirect(reply, { stripe: "error", reason: "account_in_use" });
+    try {
+      await withServiceTransaction(async (c) => {
+        await connectStripeAccount(c, tenantId, credentials);
+        // The person who connected can now also sign in with this Stripe account.
+        const session = await c.query<{ user_id: string }>(`SELECT user_id FROM sessions WHERE token_hash = $1`, [hashToken(sessionToken)]);
+        if (session.rows[0]) await linkStripeIdentity(c, session.rows[0].user_id, credentials.stripe_account_id);
+      });
+    } catch (err) {
+      if (err instanceof StripeAccountInUseError) return settingsRedirect(reply, { stripe: "error", reason: "account_in_use" });
+      throw err;
     }
-    if (owner.rows.length) {
-      // Dev convenience: the shared mock account moves to the latest workspace.
-      await servicePool.query(
-        `UPDATE integrations SET status = 'disconnected' WHERE source = 'stripe' AND credentials->>'stripe_account_id' = $1 AND tenant_id <> $2`,
-        [MOCK_ACCOUNT_ID, tenantId],
-      );
-    }
-
-    await withServiceTransaction(async (c) => {
-      await c.query(
-        `INSERT INTO integrations (tenant_id, source, status, credentials, settings)
-         VALUES ($1, 'stripe', 'active', $2::jsonb, '{}'::jsonb)
-         ON CONFLICT (tenant_id, source) DO UPDATE
-           SET status = 'active', credentials = EXCLUDED.credentials, historical_sync_completed_at = NULL,
-               settings = COALESCE(integrations.settings, '{}'::jsonb) - 'backfill_cursor', updated_at = now()`,
-        [tenantId, JSON.stringify(credentials)],
-      );
-      await c.query(`INSERT INTO audit_log (tenant_id, actor, action, detail) VALUES ($1, 'stripe', 'stripe_connected', $2::jsonb)`, [
-        tenantId,
-        JSON.stringify({ account: credentials.stripe_account_id, livemode: credentials.livemode ?? false }),
-      ]);
-    });
 
     // Import open invoices within a time budget; the scheduler finishes big accounts.
     let result = { imported: 0, failed: 0, done: false };
