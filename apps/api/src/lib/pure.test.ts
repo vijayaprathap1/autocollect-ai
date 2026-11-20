@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderTemplate, formatCalendarDate, unknownPlaceholders, money } from "../modules/workflows/render.js";
+import { renderTemplate, formatCalendarDate, unknownPlaceholders, money, NO_PAY_LINK_SENTENCE } from "../modules/workflows/render.js";
 import { mapHeaders, parseCalendarDate, toCents } from "../modules/integrations/csv.controller.js";
 import { replyAddressFor, invoiceIdFromMailboxHash } from "./reply-address.js";
 import { invoiceSubscriptionId, planForSubscription } from "./subscriptions.js";
@@ -42,6 +42,24 @@ describe("template rendering", () => {
 
   it("formats money in any ISO currency", () => {
     expect(money(1000, "eur")).toContain("10.00");
+  });
+
+  it("replaces the pay-link sentence when an invoice has no payment link", () => {
+    const tpl = {
+      subject: "Invoice {amount} {pay_link}",
+      body: "Hi {client_name},\n\nInvoice {amount} is past due. Please arrange payment at your earliest convenience: {pay_link}\n\nThanks!\n{company_name}",
+    };
+    const r = renderTemplate(tpl, { ...ctx, payLink: null });
+    expect(r.subject).toBe("Invoice $1,250.50");
+    expect(r.body).toBe(
+      `Hi Ada,\n\nInvoice $1,250.50 is past due. ${NO_PAY_LINK_SENTENCE}\n\nThanks!\nAcme`,
+    );
+    expect(r.body).not.toMatch(/:\s*$/m);
+  });
+
+  it("keeps the pay link sentence when a link exists", () => {
+    const r = renderTemplate({ subject: "s", body: "Due {due_date}. You can pay in one click here: {pay_link}\nThanks" }, ctx);
+    expect(r.body).toBe("Due Sep 30, 2026. You can pay in one click here: https://pay.example/x\nThanks");
   });
 });
 

@@ -40,7 +40,22 @@ export function unknownPlaceholders(text: string): string[] {
   return [...found];
 }
 
+/** Used instead of the sentence that carries `{pay_link}` when an invoice has no payment link. */
+export const NO_PAY_LINK_SENTENCE = "Reply to this email and we'll send you payment details.";
+
+/**
+ * Invoices without a payment link (QuickBooks, CSV before a link is created)
+ * would otherwise render "…pay here: " with nothing after it. Replace the whole
+ * sentence containing {pay_link} with a clear instruction instead.
+ */
+function withoutPayLinkSentence(text: string): string {
+  return text.replace(/(^|(?<=[.!?]\s))[^.!?\n]*\{pay_link\}[^\S\n]*[.!?]?/gm, NO_PAY_LINK_SENTENCE);
+}
+
 export function renderTemplate(template: { subject: string; body: string }, ctx: RenderContext): { subject: string; body: string } {
+  if (!ctx.payLink?.trim()) {
+    template = { subject: template.subject.replace(/\s*\{pay_link\}/g, ""), body: withoutPayLinkSentence(template.body) };
+  }
   const vars: Record<string, string> = {
     client_name: ctx.clientName?.trim() || "there",
     company_name: ctx.companyName?.trim() || "our team",
