@@ -57,6 +57,12 @@ export const config = {
   // Postmark
   postmarkServerToken: env("POSTMARK_SERVER_TOKEN"),
   postmarkFromEmail: env("POSTMARK_FROM_EMAIL", "no-reply@ar.autocollect.dev"),
+  /**
+   * Postmark inbound address (e.g. abc123@inbound.postmarkapp.com). Reminder
+   * emails set Reply-To to `local+<invoiceId>@domain` so replies route back to
+   * the right invoice via MailboxHash.
+   */
+  postmarkInboundAddress: env("POSTMARK_INBOUND_ADDRESS"),
 
   // Anthropic
   anthropicApiKey: env("ANTHROPIC_API_KEY"),

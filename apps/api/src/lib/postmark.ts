@@ -15,7 +15,21 @@ export type SendEmailInput = {
   text: string;
   html?: string;
   tag?: string;
+  replyTo?: string;
+  headers?: { Name: string; Value: string }[];
 };
+
+/**
+ * Reply-To address that routes a customer's reply back to its invoice
+ * (`local+<invoiceId>@domain`, surfaced by Postmark as MailboxHash).
+ */
+export function replyToForInvoice(invoiceId: string): string | undefined {
+  const inbound = config.postmarkInboundAddress;
+  const at = inbound.lastIndexOf("@");
+  if (!inbound || at < 1) return undefined;
+  const local = inbound.slice(0, at).split("+")[0];
+  return `${local}+${invoiceId}@${inbound.slice(at + 1)}`;
+}
 
 export async function sendEmail(input: SendEmailInput): Promise<{ providerMsgId: string }> {
   if (!postmarkEnabled) {
@@ -37,6 +51,8 @@ export async function sendEmail(input: SendEmailInput): Promise<{ providerMsgId:
       HtmlBody: input.html,
       MessageStream: "outbound",
       Tag: input.tag,
+      ...(input.replyTo ? { ReplyTo: input.replyTo } : {}),
+      ...(input.headers?.length ? { Headers: input.headers } : {}),
     }),
   }, config.providerTimeoutMs);
 
