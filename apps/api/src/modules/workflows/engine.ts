@@ -9,6 +9,7 @@ import { acquireJobLease, releaseJobLease } from "../../lib/job-lock.js";
 import { scheduledSendTime, stepToSend, type ScheduleOptions } from "../../lib/schedule.js";
 import { reminderEmail } from "../../lib/email-templates.js";
 import { replyAddressFor } from "../../lib/reply-address.js";
+import { buildSmsBody, isSmsOptOutError } from "../../lib/sms-body.js";
 import { config } from "../../config.js";
 import type { WorkflowStep } from "@autocollect/shared";
 
@@ -39,6 +40,7 @@ type InvoiceForEngine = {
   next_step_due_at: string | null;
   snoozed_until: string | null;
   workflow_id: string | null;
+  customer_id: string | null;
   customer_name: string | null;
   customer_email: string | null;
   customer_phone: string | null;
@@ -67,7 +69,7 @@ const INVOICE_SELECT = `
   SELECT i.id, i.tenant_id, i.amount_due, i.currency, i.due_date, i.payment_link,
          COALESCE(i.due_date, i.issue_date, i.created_at::date)::text AS anchor_date,
          i.external_id, i.next_step_index, i.next_step_due_at, i.snoozed_until, i.workflow_id,
-         c.name AS customer_name, c.email AS customer_email, c.phone AS customer_phone,
+         c.id AS customer_id, c.name AS customer_name, c.email AS customer_email, c.phone AS customer_phone,
          c.sms_opt_out AS customer_sms_opt_out,
          t.name AS tenant_name, t.tone, t.timezone, t.send_hour, t.skip_weekends,
          COALESCE((t.branding->>'hideBranding')::boolean, FALSE) AS hide_branding,
@@ -129,6 +131,27 @@ async function audit(tenantId: string, action: string, detail: Record<string, un
 
 async function deferInvoice(invoiceId: string, until: Date): Promise<void> {
   await servicePool.query(`UPDATE invoices SET next_step_due_at = $2, updated_at = now() WHERE id = $1`, [invoiceId, until.toISOString()]);
+}
+
+/**
+ * Move past a step this customer cannot receive (no address, opted out) so
+ * later steps on other channels still run instead of the sequence waiting on
+ * it forever. A NULL due date lets the next run schedule the following step.
+ */
+async function skipStep(
+  inv: InvoiceForEngine,
+  steps: WorkflowStep[],
+  index: number,
+  reason: string,
+  channel: string,
+  db: Pick<PoolClient, "query"> = servicePool,
+): Promise<void> {
+  const hasNext = index + 1 < steps.length;
+  await db.query(
+    `UPDATE invoices SET next_step_index = $2, next_step_due_at = NULL, updated_at = now() WHERE id = $1`,
+    [inv.id, hasNext ? index + 1 : 9999],
+  );
+  await audit(inv.tenant_id, "dunning_step_skipped", { invoice_id: inv.id, step_index: index, channel, reason }, db);
 }
 
 async function transaction<T>(fn: (c: PoolClient) => Promise<T>): Promise<T> {
@@ -215,8 +238,8 @@ async function processOne(inv: InvoiceForEngine, now: Date, force: boolean, ctx:
     channel === "sms" ? (inv.customer_sms_opt_out ? null : inv.customer_phone) : inv.customer_email;
   if (!recipient) {
     if (force) throw badRequest(channel === "sms" ? "Customer has no phone number (or opted out of SMS)" : "Customer has no email address", "NO_RECIPIENT");
-    await audit(inv.tenant_id, "dunning_skipped_no_recipient", { invoice_id: inv.id, step_index: index, channel });
-    await deferInvoice(inv.id, new Date(now.getTime() + 24 * HOUR));
+    const reason = channel === "sms" ? (inv.customer_sms_opt_out ? "sms_opt_out" : "no_phone") : "no_email";
+    await skipStep(inv, steps, index, reason, channel);
     return "skipped";
   }
 
@@ -284,7 +307,8 @@ async function processOne(inv: InvoiceForEngine, now: Date, force: boolean, ctx:
   let providerMsgId: string;
   try {
     if (channel === "sms") {
-      const body = rendered.body.replace(/\s+/g, " ").trim().slice(0, 320);
+      // Keeps the pay link and the STOP notice even when the text is shortened.
+      const body = buildSmsBody(rendered.body, inv.payment_link);
       providerMsgId = (await sendSms({ to: recipient, body })).providerMsgId;
     } else {
       const email = reminderEmail({
@@ -313,6 +337,26 @@ async function processOne(inv: InvoiceForEngine, now: Date, force: boolean, ctx:
     // ── 3b. RECORD FAILURE ──────────────────────────────────────────────
     const message = (err instanceof Error ? err.message : String(err)).slice(0, 1000);
     const permanent = isPermanent(err);
+
+    // The customer replied STOP: remember it for every invoice and move on to
+    // the next step rather than pausing the invoice for review.
+    if (channel === "sms" && isSmsOptOutError(err)) {
+      await transaction(async (c) => {
+        await c.query(
+          `UPDATE messages SET status = 'failed', last_error = $4, attempts = GREATEST(attempts, $5)
+            WHERE tenant_id = $1 AND invoice_id = $2 AND step_index = $3`,
+          [inv.tenant_id, inv.id, index, message, MAX_SEND_ATTEMPTS],
+        );
+        await refundCredit(c, inv.tenant_id, "dunning_send_failed", inv.id);
+        if (inv.customer_id) {
+          await c.query(`UPDATE customers SET sms_opt_out = TRUE WHERE id = $1 AND tenant_id = $2`, [inv.customer_id, inv.tenant_id]);
+        }
+        await skipStep(inv, steps, index, "sms_opted_out_at_carrier", channel, c);
+      });
+      if (force) throw new ApiError(422, "SMS_OPTED_OUT", "This customer has opted out of text messages (replied STOP).");
+      return "skipped";
+    }
+
     const gaveUp = permanent || claim.attempts >= MAX_SEND_ATTEMPTS;
     await transaction(async (c) => {
       await c.query(
