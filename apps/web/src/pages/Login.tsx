@@ -66,9 +66,12 @@ export function Login() {
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Signing in…" : "Sign in"}
           </Button>
-          <div className="text-sm">
+          <div className="flex items-center justify-between text-sm">
             <Link to="/forgot-password" className="text-primary hover:underline">
               Forgot password?
+            </Link>
+            <Link to="/signup" className="text-primary hover:underline">
+              Create an account
             </Link>
           </div>
         </form>

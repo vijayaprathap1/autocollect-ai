@@ -3,7 +3,7 @@ import { randomBytes, createHash } from "node:crypto";
 import argon2 from "argon2";
 import { query, servicePool, setTenantForRequest } from "./db.js";
 import { config } from "../config.js";
-import { unauthorized, badRequest } from "./errors.js";
+import { unauthorized, badRequest, forbidden } from "./errors.js";
 import type { UserRole } from "@autocollect/shared";
 
 export type AuthUser = {
@@ -52,15 +52,24 @@ export async function createSession(
   ip?: string,
   userAgent?: string,
   sessionType: "tenant" | "admin" = "tenant",
+  tenantId?: string | null,
 ): Promise<string> {
   const token = generateToken();
   const tokenHash = hashToken(token);
   const expiresAt = new Date(Date.now() + config.sessionTtlHours * 3600_000);
 
   await client.query(
-    `INSERT INTO sessions (user_id, token_hash, ip, user_agent, expires_at, session_type)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [userId, tokenHash, ip ?? null, userAgent ?? null, expiresAt.toISOString(), sessionType],
+    `INSERT INTO sessions (user_id, token_hash, ip, user_agent, expires_at, session_type, tenant_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [
+      userId,
+      tokenHash,
+      ip ?? null,
+      userAgent ?? null,
+      expiresAt.toISOString(),
+      sessionType,
+      sessionType === "tenant" ? (tenantId ?? null) : null,
+    ],
   );
 
   return token;
@@ -94,12 +103,15 @@ export function extractCookieToken(req: FastifyRequest): string | undefined {
 export async function findUserByEmail(
   client: { query: <T>(sql: string, params?: unknown[]) => Promise<{ rows: T[] }> },
   email: string,
-): Promise<{ id: string; email: string; password_hash: string; display_name: string | null; status: string; is_super_admin: boolean } | null> {
+): Promise<{
+  id: string; email: string; password_hash: string; display_name: string | null; status: string;
+  is_super_admin: boolean; email_verified_at: string | null;
+} | null> {
   const rows = await client.query<{
     id: string; email: string; password_hash: string; display_name: string | null;
-    status: string; is_super_admin: boolean;
+    status: string; is_super_admin: boolean; email_verified_at: string | null;
   }>(
-    `SELECT id, email, password_hash, display_name, status, is_super_admin
+    `SELECT id, email, password_hash, display_name, status, is_super_admin, email_verified_at
      FROM users WHERE email = $1`,
     [email.toLowerCase().trim()],
   );
@@ -109,19 +121,48 @@ export async function findUserByEmail(
 export async function resolveUserMembership(
   client: { query: <T>(sql: string, params?: unknown[]) => Promise<{ rows: T[] }> },
   userId: string,
-): Promise<{ tenantId: string; role: UserRole; tenantSlug: string } | null> {
-  const rows = await client.query<{ tenant_id: string; role: string; slug: string }>(
-    `SELECT m.tenant_id, m.role, t.slug
+): Promise<{ tenantId: string; role: UserRole; tenantSlug: string; tenantStatus: string } | null> {
+  // Prefer an active organization; fall back to the oldest membership so a
+  // suspended org still resolves (and can be reported as suspended).
+  const rows = await client.query<{ tenant_id: string; role: string; slug: string; status: string | null }>(
+    `SELECT m.tenant_id, m.role, t.slug, t.status
      FROM memberships m
      JOIN tenants t ON t.id = m.tenant_id
      WHERE m.user_id = $1 AND m.status = 'active'
-     ORDER BY m.created_at ASC
+     ORDER BY (COALESCE(t.status, 'active') = 'active') DESC, m.created_at ASC, m.tenant_id ASC
      LIMIT 1`,
     [userId],
   );
   const r = rows.rows[0];
   if (!r) return null;
-  return { tenantId: r.tenant_id, role: r.role as UserRole, tenantSlug: r.slug };
+  return {
+    tenantId: r.tenant_id,
+    role: r.role as UserRole,
+    tenantSlug: r.slug,
+    tenantStatus: r.status ?? "active",
+  };
+}
+
+/** All organizations the user can switch to. */
+export async function listUserMemberships(
+  client: { query: <T>(sql: string, params?: unknown[]) => Promise<{ rows: T[] }> },
+  userId: string,
+): Promise<{ tenantId: string; name: string; slug: string; role: UserRole; status: string }[]> {
+  const rows = await client.query<{ tenant_id: string; name: string; slug: string; role: string; status: string | null }>(
+    `SELECT m.tenant_id, t.name, t.slug, m.role, t.status
+       FROM memberships m
+       JOIN tenants t ON t.id = m.tenant_id
+      WHERE m.user_id = $1 AND m.status = 'active'
+      ORDER BY m.created_at ASC, m.tenant_id ASC`,
+    [userId],
+  );
+  return rows.rows.map((r) => ({
+    tenantId: r.tenant_id,
+    name: r.name,
+    slug: r.slug,
+    role: r.role as UserRole,
+    status: r.status ?? "active",
+  }));
 }
 
 export async function provisionUserAndTenant(
@@ -185,18 +226,24 @@ export async function authenticate(req: FastifyRequest): Promise<AuthUser> {
   const tokenHash = hashToken(token);
 
   // Look up session → user → membership
+  // The session pins the active organization (sessions.tenant_id). Older
+  // sessions without one resolve deterministically to the oldest membership.
   const rows = await servicePool.query<{
     user_id: string; session_type: "tenant" | "admin"; email: string; display_name: string | null;
     is_super_admin: boolean; status: string;
-    tenant_id: string | null; role: string | null; slug: string | null;
+    tenant_id: string | null; role: string | null; slug: string | null; tenant_status: string | null;
   }>(
     `SELECT s.user_id, s.session_type, u.email, u.display_name, u.is_super_admin, u.status,
-            m.tenant_id, m.role, t.slug
+            m.tenant_id, m.role, t.slug, t.status AS tenant_status
      FROM sessions s
      JOIN users u ON u.id = s.user_id
-     LEFT JOIN memberships m ON m.user_id = u.id AND m.status = 'active'
+     LEFT JOIN memberships m
+            ON m.user_id = u.id AND m.status = 'active'
+           AND (s.tenant_id IS NULL OR m.tenant_id = s.tenant_id)
      LEFT JOIN tenants t ON t.id = m.tenant_id
-     WHERE s.token_hash = $1 AND s.expires_at > now()`,
+     WHERE s.token_hash = $1 AND s.expires_at > now()
+     ORDER BY m.created_at ASC NULLS LAST, m.tenant_id ASC
+     LIMIT 1`,
     [tokenHash],
   );
 
@@ -222,6 +269,9 @@ export async function authenticate(req: FastifyRequest): Promise<AuthUser> {
 
   if (!row.tenant_id || !row.role) {
     throw unauthorized("No organization associated with this account");
+  }
+  if (row.tenant_status && row.tenant_status !== "active") {
+    throw forbidden("This organization has been suspended. Contact support.", "TENANT_SUSPENDED");
   }
 
   // Set tenant on the request's database connection

@@ -126,6 +126,11 @@ export async function membersRoutes(app: FastifyInstance) {
       throw badRequest("No account found for this email. Please sign up first.", "ACCOUNT_REQUIRED");
     }
     const userId = existingUser.rows[0].id;
+    // The invitation token was delivered to this address, which proves ownership.
+    await pool.query(
+      `UPDATE users SET email_verified_at = COALESCE(email_verified_at, now()) WHERE id = $1`,
+      [userId],
+    );
 
     const alreadyMember = await pool.query<{ id: string }>(
       `SELECT 1 FROM memberships WHERE user_id = $1 AND tenant_id = $2`,
@@ -134,7 +139,7 @@ export async function membersRoutes(app: FastifyInstance) {
     if (alreadyMember.rows.length > 0) {
       await pool.query(`UPDATE invitations SET status = 'accepted', accepted_at = now() WHERE id = $1`, [inv.id]);
       // Auto-login
-      const sessionToken = await createSession(pool, userId, req.ip, req.headers["user-agent"]);
+      const sessionToken = await createSession(pool, userId, req.ip, req.headers["user-agent"], "tenant", inv.tenant_id);
       setSessionCookie(reply, sessionToken);
       return { ok: true, message: "You are already a member of this organization" };
     }
@@ -150,7 +155,7 @@ export async function membersRoutes(app: FastifyInstance) {
     );
 
     // Auto-login after accepting invitation
-    const sessionToken = await createSession(pool, userId, req.ip, req.headers["user-agent"]);
+    const sessionToken = await createSession(pool, userId, req.ip, req.headers["user-agent"], "tenant", inv.tenant_id);
     setSessionCookie(reply, sessionToken);
 
     return { ok: true, message: "Welcome! You have joined the organization." };
