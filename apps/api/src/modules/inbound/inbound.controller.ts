@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { requireRole } from "../../plugins/tenant.js";
-import { badRequest, unauthorized } from "../../lib/errors.js";
+import { badRequest, notFound, unauthorized } from "../../lib/errors.js";
 import { config } from "../../config.js";
 import { processInboundEmail, type PostmarkInboundPayload } from "./inbound.service.js";
 
@@ -41,6 +41,7 @@ export async function inboundRoutes(app: FastifyInstance) {
     "/integrations/postmark/dev-inbound",
     { preHandler: requireRole("admin") },
     async (req) => {
+      if (config.nodeEnv === "production") throw notFound("Disabled in production");
       const body = (req.body ?? {}) as {
         invoiceId?: string;
         from?: string;
@@ -52,8 +53,19 @@ export async function inboundRoutes(app: FastifyInstance) {
 
       let invoiceId = body.invoiceId;
       let threadId: string | null = null;
+      let customerEmail: string | null = null;
 
       if (invoiceId) {
+        // The invoice must belong to the caller's tenant (prevents cross-tenant writes).
+        const owned = await req.db.query<{ customer_email: string | null }>(
+          `SELECT c.email AS customer_email
+             FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
+            WHERE i.id = $1 AND i.tenant_id = $2`,
+          [invoiceId, req.user.tenantId],
+        );
+        if (owned.rows.length === 0) throw notFound("Invoice not found");
+        customerEmail = owned.rows[0].customer_email;
+
         const m = await req.db.query<{ provider_msg_id: string | null }>(
           `SELECT provider_msg_id FROM messages
             WHERE invoice_id = $1 AND tenant_id = $2
@@ -71,13 +83,23 @@ export async function inboundRoutes(app: FastifyInstance) {
         );
         invoiceId = m.rows[0]?.invoice_id ?? undefined;
         threadId = m.rows[0]?.provider_msg_id ?? null;
+        if (invoiceId) {
+          const c = await req.db.query<{ customer_email: string | null }>(
+            `SELECT c.email AS customer_email
+               FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
+              WHERE i.id = $1 AND i.tenant_id = $2`,
+            [invoiceId, req.user.tenantId],
+          );
+          customerEmail = c.rows[0]?.customer_email ?? null;
+        }
       }
 
       if (!invoiceId) throw badRequest("No invoice to attach the reply to");
 
       const payload: PostmarkInboundPayload = {
         MessageID: `dev-inbound-${Math.random().toString(36).slice(2, 12)}`,
-        FromFull: { Email: body.from ?? "client@example.com", Name: "Client" },
+        // Simulate the customer replying from their own address by default.
+        FromFull: { Email: body.from ?? customerEmail ?? "client@example.com", Name: "Client" },
         Subject: body.subject ?? `Re: invoice ${invoiceId}`,
         TextBody: text,
         MailboxHash: invoiceId,
