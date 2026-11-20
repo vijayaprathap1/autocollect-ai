@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
-import { getBilling, billingCheckout, getIntegrations, importCsv, qboConnect, qboSync, stripeConnect, getMembers, sendInvitation, getInvitations, revokeInvitation, updateBranding } from "@/lib/api";
+import { getBilling, billingCheckout, billingPortal, getIntegrations, importCsv, qboConnect, qboSync, stripeConnect, getMembers, sendInvitation, getInvitations, revokeInvitation, updateBranding } from "@/lib/api";
 import { useMe } from "@/lib/me";
 
 function CsvCard() {
@@ -156,6 +156,18 @@ export function Settings() {
     }
   }
 
+  async function openBillingPortal() {
+    setUpgrading(true);
+    setError(null);
+    try {
+      const { url } = await billingPortal();
+      window.location.assign(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to open billing portal");
+      setUpgrading(false);
+    }
+  }
+
   async function inviteMember() {
     setMemberBusy(true);
     setMemberMsg(null);
@@ -221,9 +233,11 @@ export function Settings() {
         </div>
       )}
 
-      {searchParams.get("billing") === "success" && (
+      {(searchParams.get("billing") === "success" || searchParams.get("billing") === "updated") && (
         <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-          You're on Growth — unlimited invoices, AI drafting, and reply inbox.
+          {searchParams.get("billing") === "updated"
+            ? "Your plan change is being applied. It can take a few seconds to show here."
+            : "Your plan is active and this month's credits have been added."}
         </div>
       )}
       {searchParams.get("billing") === "error" && (
@@ -486,6 +500,13 @@ export function Settings() {
               </div>
             ))}
           </div>
+          {billing && billing.plan !== "starter" && (
+            <div className="mt-4 flex justify-end">
+              <Button variant="secondary" onClick={openBillingPortal} disabled={upgrading}>
+                Manage billing
+              </Button>
+            </div>
+          )}
         </Card>
       </div>
     </div>

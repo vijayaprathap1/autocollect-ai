@@ -125,6 +125,26 @@ export async function markInvoicePaid(tenantId: string, invoiceExternalId: strin
   );
 }
 
+/** Mark an invoice paid by our own id (e.g. paid through an AutoCollect Payment Link). */
+export async function markInvoicePaidById(tenantId: string, invoiceId: string): Promise<void> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(invoiceId)) return;
+  await servicePool.query(
+    `UPDATE invoices
+        SET status = 'paid', next_step_index = 9999, next_step_due_at = NULL, updated_at = now()
+      WHERE tenant_id = $1 AND id = $2 AND status <> 'paid'`,
+    [tenantId, invoiceId],
+  );
+}
+
+/** Find the invoice a Stripe Payment Link was generated for. */
+export async function invoiceByPaymentLink(tenantId: string, paymentLinkId: string): Promise<string | null> {
+  const r = await servicePool.query<{ id: string }>(
+    `SELECT id FROM invoices WHERE tenant_id = $1 AND payment_link_id = $2 LIMIT 1`,
+    [tenantId, paymentLinkId],
+  );
+  return r.rows[0]?.id ?? null;
+}
+
 /** Resolve the tenant that owns a Stripe connected account (webhook routing). */
 export async function tenantByStripeAccount(stripeAccountId: string): Promise<{
   tenantId: string;

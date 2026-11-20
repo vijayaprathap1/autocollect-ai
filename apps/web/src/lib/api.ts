@@ -363,6 +363,10 @@ export async function billingCheckout(plan: string): Promise<{ url: string; plan
   return api.post<{ url: string; plan: string }>("/billing/checkout", { plan });
 }
 
+export async function billingPortal(): Promise<{ url: string }> {
+  return api.post<{ url: string }>("/billing/portal", {});
+}
+
 export type MemberDto = { id: string; email: string | null; role: string; createdAt: string };
 
 export async function getMembers(): Promise<{ members: MemberDto[] }> {

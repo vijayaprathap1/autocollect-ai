@@ -6,35 +6,18 @@ import { servicePool } from "../../lib/db.js";
 import { badRequest, notFound } from "../../lib/errors.js";
 import { decodeState, encodeState } from "../../lib/oauth.js";
 import { extractCookieToken } from "../../lib/auth.js";
-import { PLAN_KEYS, setTenantPlan, type PlanKey } from "../../lib/billing.js";
+import { handlePlatformBillingEvent } from "../billing/billing.webhooks.js";
 import { smsEnabled } from "../../lib/sms.js";
-import { ingestStripeInvoice, markInvoicePaid, tenantByStripeAccount } from "./ingest.service.js";
+import {
+  ingestStripeInvoice,
+  invoiceByPaymentLink,
+  markInvoicePaid,
+  markInvoicePaidById,
+  tenantByStripeAccount,
+} from "./ingest.service.js";
 import { claimWebhookEvent, completeWebhookEvent, failWebhookEvent } from "../../lib/webhook-events.js";
 
 const MOCK_ACCOUNT_ID = "acct_dev_mock";
-
-const PRICE_TO_PLAN: Record<string, PlanKey> = {
-  [config.billingGrowthPriceId]: "growth",
-  [config.billingProPriceId]: "pro",
-  [config.billingAgencyPriceId]: "agency",
-};
-
-function planFromSession(session: { metadata?: Record<string, string> }): PlanKey | null {
-  const plan = session.metadata?.plan;
-  return plan && PLAN_KEYS.includes(plan as PlanKey) ? (plan as PlanKey) : null;
-}
-
-/** Resolve the plan from the purchased subscription's price (authoritative). */
-async function planFromSubscription(subscriptionId: string): Promise<PlanKey | null> {
-  if (!stripeEnabled) return null;
-  try {
-    const sub = await stripe!.subscriptions.retrieve(subscriptionId);
-    const priceId = sub.items?.data?.[0]?.price?.id;
-    return priceId ? (PRICE_TO_PLAN[priceId] ?? null) : null;
-  } catch {
-    return null;
-  }
-}
 
 export async function stripeRoutes(app: FastifyInstance) {
   /**
@@ -176,51 +159,12 @@ export async function stripeRoutes(app: FastifyInstance) {
 
       const accountId = (event as { account?: string }).account;
 
-      // Platform subscription events (self-serve billing) have no `account`.
-      // checkout.session.completed -> upgrade to Growth; subscription deleted -> Starter.
-      if (!accountId && (event.type === "checkout.session.completed" || event.type === "customer.subscription.deleted")) {
-        const session = (event.data.object as {
-          metadata?: Record<string, string>;
-          client_reference_id?: string | null;
-          subscription?: string | null;
-        }) ?? {};
-        const tenantId = session.metadata?.tenantId ?? session.client_reference_id;
-        if (tenantId) {
-          const claimed = await claimWebhookEvent(event.id, "stripe", tenantId);
-          if (claimed) {
-            try {
-            let plan: PlanKey | null = null;
-            if (event.type === "checkout.session.completed") {
-              plan = planFromSession(session);
-              // No metadata.plan (older checkout or partial payload): derive from the price.
-              if (plan === null && session.subscription) {
-                plan = await planFromSubscription(session.subscription);
-              }
-            }
-            plan = plan ?? "starter";
-            if (PLAN_KEYS.includes(plan)) {
-              const prev = await servicePool.query<{ plan: string }>(
-                `SELECT plan FROM tenants WHERE id = $1`,
-                [tenantId],
-              );
-              await setTenantPlan(servicePool, tenantId, plan);
-              await servicePool.query(
-                `INSERT INTO audit_log (tenant_id, actor, action, detail)
-                 VALUES ($1, 'stripe', 'plan_changed', $2::jsonb)`,
-                [tenantId, JSON.stringify({ from: prev.rows[0]?.plan ?? "starter", to: plan, method: event.type })],
-              );
-            }
-              await completeWebhookEvent(event.id);
-            } catch (err) {
-              await failWebhookEvent(event.id, err).catch(() => {});
-              throw err;
-            }
-          }
-        }
+      // Platform (self-serve billing) events have no `account`: plan, the single
+      // subscription row and the credit wallet are synced in billing.webhooks.
+      if (!accountId) {
+        await handlePlatformBillingEvent(event);
         return reply.send({ received: true });
       }
-
-      if (!accountId) throw badRequest("Missing event.account");
 
       const conn = await tenantByStripeAccount(accountId);
       if (!conn) return reply.send({ received: true, ignored: "unknown_account" });
@@ -245,6 +189,24 @@ export async function stripeRoutes(app: FastifyInstance) {
         try {
         if (event.type === "invoice.paid" && inv.id) {
           await markInvoicePaid(conn.tenantId, inv.id);
+        } else if (
+          event.type === "checkout.session.completed" ||
+          event.type === "checkout.session.async_payment_succeeded"
+        ) {
+          // A customer paid through an AutoCollect-generated Payment Link.
+          const session = event.data.object as {
+            payment_status?: string;
+            payment_link?: string | { id?: string } | null;
+            metadata?: Record<string, string> | null;
+          };
+          if (session.payment_status === "paid") {
+            const linkId =
+              typeof session.payment_link === "string" ? session.payment_link : (session.payment_link?.id ?? null);
+            const invoiceId =
+              session.metadata?.autocollect_invoice_id ??
+              (linkId ? await invoiceByPaymentLink(conn.tenantId, linkId) : null);
+            if (invoiceId) await markInvoicePaidById(conn.tenantId, invoiceId);
+          }
         } else if (event.type === "invoice.created" || event.type === "invoice.updated") {
           await ingestStripeInvoice(conn.tenantId, {
             id: inv.id ?? "",

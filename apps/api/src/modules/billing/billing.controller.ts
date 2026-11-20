@@ -4,7 +4,8 @@ import { requireRole } from "../../plugins/tenant.js";
 import { servicePool } from "../../lib/db.js";
 import { stripe, stripeEnabled } from "../../lib/stripe.js";
 import { badRequest } from "../../lib/errors.js";
-import { PLAN_KEYS, setTenantPlan, type PlanKey } from "../../lib/billing.js";
+import { PLAN_KEYS, type PlanKey } from "../../lib/billing.js";
+import { activatePlan } from "./billing.webhooks.js";
 
 const PRICE_ID_FOR_PLAN: Record<Exclude<PlanKey, "starter">, string | undefined> = {
   growth: config.billingGrowthPriceId,
@@ -56,8 +57,38 @@ export async function billingRoutes(app: FastifyInstance) {
         if (!priceId) {
           throw badRequest(`Stripe Price ID not configured for the ${plan} plan`, "BILLING_NOT_CONFIGURED");
         }
+
+        const billing = await servicePool.query<{
+          stripe_customer_id: string | null;
+          stripe_subscription_id: string | null;
+          status: string | null;
+        }>(
+          `SELECT t.stripe_customer_id, s.stripe_subscription_id, s.status
+             FROM tenants t LEFT JOIN subscriptions s ON s.tenant_id = t.id
+            WHERE t.id = $1`,
+          [req.user.tenantId],
+        );
+        const current = billing.rows[0];
+
+        // Already subscribed: change the price on the existing subscription
+        // (prorated) instead of opening a second one. The
+        // customer.subscription.updated webhook syncs plan + credits.
+        if (current?.stripe_subscription_id && current.status && ["active", "trialing", "past_due"].includes(current.status)) {
+          const sub = await stripe!.subscriptions.retrieve(current.stripe_subscription_id);
+          const itemId = sub.items?.data?.[0]?.id;
+          if (sub.status !== "canceled" && itemId) {
+            await stripe!.subscriptions.update(current.stripe_subscription_id, {
+              items: [{ id: itemId, price: priceId }],
+              proration_behavior: "create_prorations",
+              metadata: { tenantId: req.user.tenantId, plan: planKey },
+            });
+            return { url: `${config.webOrigin}/settings?billing=updated&plan=${plan}`, plan: planKey };
+          }
+        }
+
         const session = await stripe!.checkout.sessions.create({
           mode: "subscription",
+          ...(current?.stripe_customer_id ? { customer: current.stripe_customer_id } : {}),
           line_items: [{ price: priceId, quantity: 1 }],
           success_url: `${config.webOrigin}/settings?billing=success&plan=${plan}`,
           cancel_url: `${config.webOrigin}/settings`,
@@ -104,13 +135,44 @@ export async function billingRoutes(app: FastifyInstance) {
         return reply.redirect(`${config.webOrigin}/settings?billing=error`);
       }
       const plan = q.plan as PlanKey;
-      await setTenantPlan(servicePool, q.tenant, plan);
+      const exists = await servicePool.query(`SELECT 1 FROM tenants WHERE id = $1`, [q.tenant]);
+      if (exists.rows.length === 0) return reply.redirect(`${config.webOrigin}/settings?billing=error`);
+
+      const { previousPlan, granted } = await activatePlan(q.tenant, plan, {
+        reason: plan === "starter" ? "plan_changed" : "plan_activated",
+        referenceId: "mock_checkout",
+      });
       await servicePool.query(
         `INSERT INTO audit_log (tenant_id, actor, action, detail)
          VALUES ($1, 'system', 'plan_changed', $2::jsonb)`,
-        [q.tenant, JSON.stringify({ from: "starter", to: plan, method: "mock_checkout" })],
+        [q.tenant, JSON.stringify({ from: previousPlan, to: plan, method: "mock_checkout", credits_granted: granted })],
       );
       return reply.redirect(`${config.webOrigin}/settings?billing=success&plan=${plan}`);
+    },
+  );
+
+  /**
+   * Stripe Customer Portal: update card, view invoices, cancel. Plan changes
+   * flow back through the subscription webhooks.
+   */
+  app.post(
+    "/billing/portal",
+    { preHandler: requireRole("admin") },
+    async (req) => {
+      if (!stripeEnabled) {
+        return { url: `${config.webOrigin}/settings?billing=portal-unavailable` };
+      }
+      const row = await servicePool.query<{ stripe_customer_id: string | null }>(
+        `SELECT stripe_customer_id FROM tenants WHERE id = $1`,
+        [req.user.tenantId],
+      );
+      const customer = row.rows[0]?.stripe_customer_id;
+      if (!customer) throw badRequest("No billing account yet. Choose a paid plan first.", "NO_BILLING_ACCOUNT");
+      const session = await stripe!.billingPortal.sessions.create({
+        customer,
+        return_url: `${config.webOrigin}/settings`,
+      });
+      return { url: session.url };
     },
   );
 }

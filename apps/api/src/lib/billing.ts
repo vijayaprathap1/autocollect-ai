@@ -98,6 +98,102 @@ export async function assertSeatCapacity(
   }
 }
 
+export type SubscriptionUpsert = {
+  plan: PlanKey;
+  status: string;
+  stripeSubscriptionId?: string | null;
+  priceId?: string | null;
+  periodStart?: Date | null;
+  periodEnd?: Date | null;
+};
+
+const SUBSCRIPTION_STATUSES = new Set([
+  "active", "trialing", "past_due", "canceled", "incomplete", "incomplete_expired", "unpaid", "paused",
+]);
+
+/**
+ * Keep exactly one subscription row per tenant (unique on tenant_id) and keep
+ * its monthly credit allowance in sync with the plan.
+ */
+export async function upsertSubscription(db: Db, tenantId: string, sub: SubscriptionUpsert): Promise<void> {
+  const status = SUBSCRIPTION_STATUSES.has(sub.status) ? sub.status : "active";
+  await db.query(
+    `INSERT INTO subscriptions (tenant_id, stripe_subscription_id, plan, status, price_id,
+                                current_period_start, current_period_end, credits_per_month, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+     ON CONFLICT (tenant_id) DO UPDATE
+       SET stripe_subscription_id = COALESCE(EXCLUDED.stripe_subscription_id, subscriptions.stripe_subscription_id),
+           plan = EXCLUDED.plan,
+           status = EXCLUDED.status,
+           price_id = COALESCE(EXCLUDED.price_id, subscriptions.price_id),
+           current_period_start = COALESCE(EXCLUDED.current_period_start, subscriptions.current_period_start),
+           current_period_end = COALESCE(EXCLUDED.current_period_end, subscriptions.current_period_end),
+           credits_per_month = EXCLUDED.credits_per_month,
+           updated_at = now()`,
+    [
+      tenantId,
+      sub.stripeSubscriptionId ?? null,
+      sub.plan,
+      status,
+      sub.priceId ?? null,
+      sub.periodStart ? sub.periodStart.toISOString() : null,
+      sub.periodEnd ? sub.periodEnd.toISOString() : null,
+      PLANS[sub.plan].creditsPerMonth,
+    ],
+  );
+}
+
+/**
+ * Top the tenant's wallet up to the plan's monthly allowance (no rollover:
+ * balance becomes max(balance, allowance)). Records the actual delta in the
+ * ledger. Run inside a transaction so the wallet row lock is held.
+ * Returns the number of credits granted.
+ */
+export async function refillCredits(
+  db: Db,
+  tenantId: string,
+  plan: PlanKey,
+  reason: string,
+  referenceId?: string | null,
+): Promise<number> {
+  const allowance = PLANS[plan].creditsPerMonth;
+  await db.query(
+    `INSERT INTO credit_wallets (tenant_id, balance) VALUES ($1, 0) ON CONFLICT (tenant_id) DO NOTHING`,
+    [tenantId],
+  );
+  const wallet = await db.query<{ balance: number }>(
+    `SELECT balance FROM credit_wallets WHERE tenant_id = $1 FOR UPDATE`,
+    [tenantId],
+  );
+  const current = wallet.rows[0]?.balance ?? 0;
+  const delta = Math.max(0, allowance - current);
+  if (delta === 0) return 0;
+
+  await db.query(
+    `UPDATE credit_wallets SET balance = balance + $2, updated_at = now() WHERE tenant_id = $1`,
+    [tenantId, delta],
+  );
+  await db.query(
+    `INSERT INTO credit_transactions (tenant_id, delta, reason, reference_id, actor, created_at)
+     VALUES ($1, $2, $3, $4, 'billing', now())`,
+    [tenantId, delta, reason, referenceId ?? null],
+  );
+  return delta;
+}
+
+/** Return one credit to the wallet (failed provider send) and record it. */
+export async function refundCredit(db: Db, tenantId: string, reason: string, referenceId?: string): Promise<void> {
+  await db.query(
+    `UPDATE credit_wallets SET balance = balance + 1, updated_at = now() WHERE tenant_id = $1`,
+    [tenantId],
+  );
+  await db.query(
+    `INSERT INTO credit_transactions (tenant_id, delta, reason, reference_id, actor, created_at)
+     VALUES ($1, 1, $2, $3, 'engine', now())`,
+    [tenantId, reason, referenceId ?? null],
+  );
+}
+
 /** Get the current credit balance for a tenant. */
 export async function getCreditBalance(db: Db, tenantId: string): Promise<number> {
   const row = await db.query<{ balance: number }>(

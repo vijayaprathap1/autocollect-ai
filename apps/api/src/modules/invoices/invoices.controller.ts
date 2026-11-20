@@ -158,6 +158,7 @@ export async function invoicesRoutes(app: FastifyInstance) {
     if (inv.payment_link) return { paymentLink: inv.payment_link };
 
     let link: string;
+    let linkId: string | null = null;
     if (stripeEnabled) {
       const integration = await req.db.query<{ credentials: { stripe_account_id?: string } }>(
         `SELECT credentials FROM integrations WHERE tenant_id = $1 AND source = 'stripe' LIMIT 1`,
@@ -178,15 +179,21 @@ export async function invoicesRoutes(app: FastifyInstance) {
               quantity: 1,
             },
           ],
+          // Copied onto the Checkout Session so the webhook can close this invoice.
+          metadata: { autocollect_invoice_id: id, tenant_id: req.user.tenantId },
         },
         { stripeAccount: account },
       );
       link = pl.url;
+      linkId = pl.id;
     } else {
       link = `https://pay.stripe.com/dev-pay-${Math.random().toString(36).slice(2, 10)}`;
     }
 
-    await req.db.query(`UPDATE invoices SET payment_link = $2, updated_at = now() WHERE id = $1`, [id, link]);
+    await req.db.query(
+      `UPDATE invoices SET payment_link = $2, payment_link_id = $3, updated_at = now() WHERE id = $1`,
+      [id, link, linkId],
+    );
     return { paymentLink: link };
   });
 }
