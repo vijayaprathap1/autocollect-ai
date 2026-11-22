@@ -93,7 +93,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 ## Phase 3 — Production database (Neon Postgres)
 
 - [ ] 3.1 Vercel → project → **Storage → Create Database → Neon** (or sign up at neon.tech).
-  Region: the same as your Vercel functions (default `iad1` / US East).
+  Region: `icn1` (Seoul). `vercel.json` pins functions there so they sit next to the database.
 - [ ] 3.2 In Neon → your project → **Settings → Backup & restore**: turn on point-in-time
   restore and keep at least **7 days** (paid plan recommended for 30 days).
 - [ ] 3.3 In Neon → **Connection Details**: turn **Connection pooling OFF** and copy the
