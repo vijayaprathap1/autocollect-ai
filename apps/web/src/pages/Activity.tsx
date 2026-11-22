@@ -41,7 +41,7 @@ export function Activity() {
           {data.replies.length > 0 && (
             <Card>
               <h2 className="mb-3 text-lg font-semibold">Reply inbox</h2>
-              <ul className="divide-y divide-slate-100">
+              <ul className="divide-y divide-line">
                 {data.replies.map((r) => (
                   <li key={r.id} className="py-3 text-sm">
                     <div className="flex items-center justify-between gap-3">
@@ -63,7 +63,7 @@ export function Activity() {
           {data.messages.length > 0 && (
             <Card>
               <h2 className="mb-3 text-lg font-semibold">Recent reminders</h2>
-              <ul className="divide-y divide-slate-100">
+              <ul className="divide-y divide-line">
                 {data.messages.map((m) => (
                   <li key={m.id} className="flex items-center justify-between gap-3 py-3 text-sm">
                     <div className="flex items-center gap-2">
@@ -87,7 +87,7 @@ export function Activity() {
           {data.audit.length > 0 && (
             <Card>
               <h2 className="mb-3 text-lg font-semibold">Activity log</h2>
-              <ul className="divide-y divide-slate-100">
+              <ul className="divide-y divide-line">
                 {data.audit.map((a) => (
                   <li key={a.id} className="flex items-center justify-between gap-3 py-3 text-sm">
                     <span className="font-medium">{ACTION_LABELS[a.action] ?? a.action}</span>

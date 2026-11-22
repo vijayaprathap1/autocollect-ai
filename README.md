@@ -16,7 +16,7 @@ Tools in this space (Chaser, YayPay, Invoiced) start at roughly $259–$500/mont
 - **Dunning workflows:** configurable multi-step reminder sequences with templates, sent by a Postgres-backed worker (`npm run worker`, or inside the API when `RUN_SCHEDULER=true`)
 - **Reply inbox:** inbound customer replies are captured and triaged alongside each invoice
 - **Collector workbench:** risk-ranked worklist, customer 360 (invoices, contacts, reminders, replies, promises, disputes, payments, tasks), dispute cases and promise-to-pay records
-- **Dashboard:** aging, DSO, collection effectiveness, dispute and promise KPIs, cash collected
+- **Dashboard:** aging, DSO, collection effectiveness, dispute and promise KPIs, cash collected. The signed-in app uses a system font, one accent, and a light/dark theme (the control is at the bottom of the sidebar; it follows the system until you choose).
 - **Teams and roles:** organizations with owner / admin / member roles and email invitations
 - **Credits and billing:** per-tenant credit wallet with an append-only transaction ledger; plan allowances granted from Stripe webhooks; sends pause automatically when credits run out
 - **Super-admin console:** platform KPIs, org and user management, credit grants, suspensions, and an audit feed

@@ -217,7 +217,7 @@ export function InvoiceDetail() {
         <Card>
           <h2 className="mb-3 text-lg font-semibold">Line items</h2>
           {Array.isArray(inv.lineItems) && inv.lineItems.length > 0 ? (
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-line">
               {inv.lineItems.map((li, i) => {
                 const item = li as { description?: string; quantity?: number; amount?: number };
                 return (
@@ -245,7 +245,7 @@ export function InvoiceDetail() {
               {data.timeline.map((m) => (
                 <li key={m.id} className="text-sm">
                   {m.kind === "reply" ? (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <div className="rounded-lg border border-line bg-bg p-3">
                       <span className="flex items-center gap-2">
                         <Badge tone={m.classification ?? "junk"}>{m.classification}</Badge>
                         <span className="text-xs text-muted">
@@ -253,7 +253,7 @@ export function InvoiceDetail() {
                           {m.promiseDate ? ` · pays by ${formatDate(m.promiseDate)}` : ""}
                         </span>
                       </span>
-                      <p className="mt-2 whitespace-pre-wrap text-slate-700">{m.content}</p>
+                      <p className="mt-2 whitespace-pre-wrap text-ink">{m.content}</p>
                     </div>
                   ) : (
                     <div>
@@ -267,7 +267,7 @@ export function InvoiceDetail() {
                           <span className="text-xs text-muted">{timeAgo(m.sentAt)}</span>
                         </span>
                       </div>
-                      {m.status === "failed" && m.error && <p className="mt-1 text-xs text-red-700">{m.error}</p>}
+                      {m.status === "failed" && m.error && <p className="mt-1 text-xs text-danger">{m.error}</p>}
                     </div>
                   )}
                 </li>

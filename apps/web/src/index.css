@@ -4,11 +4,46 @@
 
 :root {
   color-scheme: light;
-  --color-primary: 5 55 170;
-  --color-primary-hover: 3 40 128;
+  --bg: 245 245 247;
+  --surface: 255 255 255;
+  --ink: 29 29 31;
+  --muted: 110 110 115;
+  --line: 220 220 224;
+  --color-primary: 0 113 227;
+  --color-primary-hover: 0 84 176;
+  --danger: 215 0 21;
+  --success: 28 122 58;
+  --shadow: 0 1px 1px rgb(0 0 0 / 0.04), 0 12px 32px rgb(0 0 0 / 0.05);
+}
+
+.dark {
+  color-scheme: dark;
+  --bg: 0 0 0;
+  --surface: 28 28 30;
+  --ink: 245 245 247;
+  --muted: 174 174 178;
+  --line: 58 58 60;
+  --color-primary: 10 132 255;
+  --color-primary-hover: 90 170 255;
+  --danger: 255 69 58;
+  --success: 48 209 88;
+  --shadow: 0 1px 1px rgb(0 0 0 / 0.4), 0 16px 40px rgb(0 0 0 / 0.35);
 }
 
 body {
-  @apply bg-bg text-ink font-sans antialiased;
-  font-family: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  @apply bg-bg text-ink antialiased;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  font-feature-settings: "ss01", "cv11";
+}
+
+:focus-visible {
+  outline: 2px solid rgb(var(--color-primary));
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

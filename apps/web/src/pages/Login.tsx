@@ -120,7 +120,7 @@ export function Login() {
         <PasswordField value={password} onChange={setPassword} autoFocus={Boolean(email)} />
         <div className="flex items-center justify-between text-sm">
           <label className="flex items-center gap-2 text-muted">
-            <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+            <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="h-4 w-4 rounded border-line" />
             Keep me signed in
           </label>
           <Link to={`/forgot-password${email ? `?email=${encodeURIComponent(email)}` : ""}`} className="font-medium text-primary hover:underline">

@@ -43,7 +43,7 @@ export function Promises() {
       </Card>
       <label className="block max-w-xs text-sm">
         <span className="mb-1 block text-muted">Status</span>
-        <select className="w-full rounded-md border border-slate-300 bg-white px-2 py-2" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <select className="w-full rounded-md border border-line bg-surface px-2 py-2" value={status} onChange={(e) => setStatus(e.target.value)}>
           {STATUSES.map((s) => <option key={s} value={s}>{s || "All"}</option>)}
         </select>
       </label>
@@ -53,7 +53,7 @@ export function Promises() {
         <Card className="overflow-x-auto p-0">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-muted">
+              <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
                 <th className="px-4 py-3 font-medium">Customer</th>
                 <th className="px-4 py-3 font-medium">Invoice</th>
                 <th className="px-4 py-3 font-medium">Amount</th>
@@ -63,7 +63,7 @@ export function Promises() {
             </thead>
             <tbody>
               {rows.map((p) => (
-                <tr key={p.id} className="border-b border-slate-100 last:border-0">
+                <tr key={p.id} className="border-b border-line last:border-0">
                   <td className="px-4 py-3">{p.customer_name ?? "—"}</td>
                   <td className="px-4 py-3">{p.invoice_id ? <Link className="text-primary hover:underline" to={`/invoices/${p.invoice_id}`}>{p.external_id ?? "Invoice"}</Link> : "—"}</td>
                   <td className="px-4 py-3">{formatMoney(p.amount, p.currency)}</td>

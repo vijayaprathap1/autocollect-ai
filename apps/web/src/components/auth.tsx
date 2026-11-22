@@ -17,7 +17,7 @@ export function AuthLayout({ title, subtitle, children, footer }: { title: strin
           <h1 className="mt-4 text-lg font-semibold text-ink">{title}</h1>
           {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
         </div>
-        <div className="rounded-xl border border-slate-200 bg-surface p-6 shadow-sm">{children}</div>
+        <div className="rounded-2xl border border-line bg-surface p-6 shadow-card">{children}</div>
         {footer && <div className="mt-4 text-center text-sm text-muted">{footer}</div>}
       </div>
     </div>
@@ -26,10 +26,10 @@ export function AuthLayout({ title, subtitle, children, footer }: { title: strin
 
 export function Alert({ tone = "error", children }: { tone?: "error" | "success" | "info" | "warning"; children: ReactNode }) {
   const styles = {
-    error: "border-red-200 bg-red-50 text-red-800",
-    success: "border-green-200 bg-green-50 text-green-800",
-    info: "border-blue-200 bg-blue-50 text-blue-800",
-    warning: "border-amber-200 bg-amber-50 text-amber-900",
+    error: "border-danger/30 bg-danger/10 text-danger",
+    success: "border-success/30 bg-success/10 text-success",
+    info: "border-primary/25 bg-primary/10 text-primary",
+    warning: "border-warning/40 bg-warning/10 text-warning",
   }[tone];
   return (
     <div role={tone === "error" ? "alert" : "status"} className={cn("rounded-lg border px-3 py-2.5 text-sm", styles)}>
@@ -54,7 +54,7 @@ export function Field({
       </label>
       <Input id={id} aria-invalid={Boolean(error)} aria-describedby={describedBy} {...props} />
       {error ? (
-        <p id={`${id}-error`} className="mt-1 text-xs text-red-700">
+        <p id={`${id}-error`} className="mt-1 text-xs text-danger">
           {error}
         </p>
       ) : hint ? (
@@ -134,7 +134,7 @@ export function PasswordField({
           {visible ? "Hide" : "Show"}
         </button>
       </div>
-      {error && <p className="mt-1 text-xs text-red-700">{error}</p>}
+      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
       {showStrength && value.length > 0 && (
         <div className="mt-2" aria-live="polite">
           <div className="flex gap-1">
@@ -143,7 +143,7 @@ export function PasswordField({
                 key={i}
                 className={cn(
                   "h-1 flex-1 rounded-full",
-                  i < s.score ? (s.score <= 2 ? "bg-amber-400" : "bg-green-500") : "bg-slate-200",
+                  i < s.score ? (s.score <= 2 ? "bg-warning" : "bg-success") : "bg-line",
                 )}
               />
             ))}
@@ -168,7 +168,7 @@ export function SocialSignIn({ mode = "signin" }: { mode?: "signin" | "signup" }
   return (
     <>
       <div className="my-4 flex items-center gap-3 text-xs text-muted">
-        <span className="h-px flex-1 bg-slate-200" /> or <span className="h-px flex-1 bg-slate-200" />
+        <span className="h-px flex-1 bg-line" /> or <span className="h-px flex-1 bg-line" />
       </div>
       <div className="space-y-2">
         {data.google && <GoogleLink label={`${verb} with Google`} />}
@@ -190,7 +190,7 @@ export function GoogleButton({ label = "Continue with Google" }: { label?: strin
   return (
     <>
       <div className="my-4 flex items-center gap-3 text-xs text-muted">
-        <span className="h-px flex-1 bg-slate-200" /> or <span className="h-px flex-1 bg-slate-200" />
+        <span className="h-px flex-1 bg-line" /> or <span className="h-px flex-1 bg-line" />
       </div>
       <GoogleLink label={label} />
     </>
@@ -220,7 +220,7 @@ function GoogleLink({ label }: { label: string }) {
     <>
       <a
         href={apiUrl("/auth/google")}
-        className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-slate-50"
+        className="flex w-full items-center justify-center gap-2 rounded-full border border-line bg-surface px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-bg"
       >
         <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
           <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />

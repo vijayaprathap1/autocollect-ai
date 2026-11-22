@@ -42,9 +42,9 @@ export function ConfirmDialog({
   }, [handleKeyDown]);
 
   const confirmStyles: Record<string, string> = {
-    danger: "bg-red-600 hover:bg-red-700 text-white",
+    danger: "bg-danger text-white hover:opacity-90",
     primary: "bg-primary hover:bg-primary-hover text-white",
-    secondary: "bg-surface border border-slate-200 text-ink hover:bg-slate-50",
+    secondary: "bg-surface border border-line text-ink hover:bg-bg",
   };
 
   return (

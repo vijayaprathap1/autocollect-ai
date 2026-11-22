@@ -74,9 +74,9 @@ export function AdminConsole() {
         <h2 className="mb-1 text-lg font-semibold">Create tenant workspace</h2>
         <p className="mb-4 text-sm text-muted">The owner receives a secure link to set their password.</p>
         <form onSubmit={createTenant} className="grid gap-3 md:grid-cols-4">
-          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Organization name" value={tenantName} onChange={(e) => setTenantName(e.target.value)} required />
-          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Owner name" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
-          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" type="email" placeholder="Owner email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} required />
+          <input className="rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink" placeholder="Organization name" value={tenantName} onChange={(e) => setTenantName(e.target.value)} required />
+          <input className="rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink" placeholder="Owner name" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
+          <input className="rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink" type="email" placeholder="Owner email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} required />
           <button className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-50" disabled={provision.isPending}>{provision.isPending ? "Creating..." : "Create tenant"}</button>
         </form>
         {provisionError && <p className="mt-3 text-sm text-danger">{provisionError}</p>}
@@ -106,7 +106,7 @@ export function AdminConsole() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-left text-muted">
+                <tr className="border-b border-line text-left text-muted">
                   <th className="pb-2 font-medium">Name</th>
                   <th className="pb-2 font-medium">Plan</th>
                   <th className="pb-2 font-medium">Status</th>
@@ -119,7 +119,7 @@ export function AdminConsole() {
               </thead>
               <tbody>
                 {tenants.data?.tenants.map((t) => (
-                  <tr key={t.id} className="border-b border-slate-100">
+                  <tr key={t.id} className="border-b border-line">
                     <td className="py-2">
                       <div className="font-medium">{t.name}</div>
                       <div className="text-xs text-muted">{t.slug}</div>
@@ -127,7 +127,7 @@ export function AdminConsole() {
                     <td className="py-2 capitalize">{t.plan}</td>
                     <td className="py-2">
                       <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                        t.status === "active" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                        t.status === "active" ? "bg-success/10 text-success" : "bg-danger/10 text-danger"
                       }`}>
                         {t.status}
                       </span>
@@ -144,7 +144,7 @@ export function AdminConsole() {
                         })}
                         disabled={toggleStatus.isPending}
                         className={`text-xs cursor-pointer ${
-                          t.status === "active" ? "text-red-600 hover:underline" : "text-green-600 hover:underline"
+                          t.status === "active" ? "text-danger hover:underline" : "text-success hover:underline"
                         }`}
                       >
                         {t.status === "active" ? "Suspend" : "Activate"}
@@ -167,7 +167,7 @@ export function AdminConsole() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-left text-muted">
+                <tr className="border-b border-line text-left text-muted">
                   <th className="pb-2 font-medium">Email</th>
                   <th className="pb-2 font-medium">Name</th>
                   <th className="pb-2 font-medium">Org</th>
@@ -179,7 +179,7 @@ export function AdminConsole() {
               </thead>
               <tbody>
                 {users.data?.users.map((u) => (
-                  <tr key={u.id} className="border-b border-slate-100">
+                  <tr key={u.id} className="border-b border-line">
                     <td className="py-2 font-medium">{u.email}</td>
                     <td className="py-2">{u.displayName ?? "-"}</td>
                     <td className="py-2 text-muted">{u.tenantName ?? "-"}</td>

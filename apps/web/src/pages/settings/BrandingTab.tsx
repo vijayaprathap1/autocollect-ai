@@ -47,8 +47,8 @@ export function BrandingTab() {
         <div>
           <label className="mb-1 block text-sm font-medium">Primary color</label>
           <div className="flex items-center gap-2">
-            <input value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} placeholder="#2563EB" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-            <input type="color" aria-label="Pick color" value={/^#[0-9a-f]{6}$/i.test(primaryColor) ? primaryColor : "#2563eb"} onChange={(e) => setPrimaryColor(e.target.value)} className="h-9 w-9 rounded border border-slate-300" />
+            <input value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} placeholder="#2563EB" className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink" />
+            <input type="color" aria-label="Pick color" value={/^#[0-9a-f]{6}$/i.test(primaryColor) ? primaryColor : "#2563eb"} onChange={(e) => setPrimaryColor(e.target.value)} className="h-9 w-9 rounded border border-line" />
           </div>
         </div>
         <Field

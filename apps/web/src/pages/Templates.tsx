@@ -89,7 +89,7 @@ function TemplateRow({ template }: { template: TemplateDto }) {
       <input
         value={subject}
         onChange={(e) => setSubject(e.target.value)}
-        className="mb-3 w-full rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
+        className="mb-3 w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
       />
 
       <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">Body</label>
@@ -97,14 +97,14 @@ function TemplateRow({ template }: { template: TemplateDto }) {
         value={body}
         onChange={(e) => setBody(e.target.value)}
         rows={6}
-        className="w-full rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
+        className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
       />
 
       <p className="mt-2 text-xs text-muted">
         Placeholders: {KNOWN_VARS.map((v) => `{${v}}`).join(" ")}
       </p>
       {unknownVars(`${subject}\n${body}`).length > 0 && (
-        <p className="mt-1 text-xs text-amber-700">
+        <p className="mt-1 text-xs text-warning">
           Unrecognised placeholder{unknownVars(`${subject}\n${body}`).length > 1 ? "s" : ""}: {unknownVars(`${subject}\n${body}`).map((v) => `{${v}}`).join(", ")} — these
           would be sent to customers as-is.
         </p>
@@ -114,7 +114,7 @@ function TemplateRow({ template }: { template: TemplateDto }) {
         <Button variant="secondary" onClick={save} disabled={saving || !dirty}>
           {saving ? "Saving…" : "Save edits"}
         </Button>
-        {saved && <span className="text-sm text-green-700">Saved</span>}
+        {saved && <span className="text-sm text-success">Saved</span>}
         {error && <span className="text-sm text-danger">{error}</span>}
       </div>
     </Card>

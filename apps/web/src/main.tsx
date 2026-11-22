@@ -2,7 +2,6 @@ import { StrictMode, Suspense, lazy, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider, QueryCache } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import "@fontsource-variable/inter";
 import "./index.css";
 import { Shell, AdminShell, PublicRoute, NotFound } from "./App";
 import { ToastProvider } from "./components/Toast";

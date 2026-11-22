@@ -7,6 +7,20 @@ import { formatDate, formatMoney, timeAgo } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { StripeWelcome } from "@/components/StripeWelcome";
 
+function Sparkline({ values }: { values: number[] }) {
+  if (values.length < 2) return null;
+  const max = Math.max(...values, 1);
+  const w = 160;
+  const h = 36;
+  const step = w / (values.length - 1);
+  const d = values.map((v, i) => `${i === 0 ? "M" : "L"}${i * step},${h - (v / max) * (h - 4) - 2}`).join(" ");
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="mt-3 h-9 w-full text-primary" role="img" aria-label="Cash collected over the selected range">
+      <path d={d} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 const AGING_LABELS: Record<string, string> = {
   "0-30": "0–30 days",
   "31-60": "31–60 days",
@@ -75,9 +89,9 @@ export function Dashboard() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {["Outstanding", "Overdue", "Recovered (30d)", "Avg DSO", "Credits"].map((label) => (
             <Card key={label} className="min-h-[132px] animate-pulse">
-              <div className="h-4 w-24 rounded bg-slate-100" />
-              <div className="mt-4 h-8 w-32 rounded bg-slate-100" />
-              <div className="mt-3 h-3 w-20 rounded bg-slate-100" />
+              <div className="h-4 w-24 rounded bg-bg" />
+              <div className="mt-4 h-8 w-32 rounded bg-bg" />
+              <div className="mt-3 h-3 w-20 rounded bg-bg" />
             </Card>
           ))}
         </div>
@@ -89,10 +103,10 @@ export function Dashboard() {
     return (
       <div>
         <PageHeader title={greeting} subtitle="Here's where your cash stands." />
-        <Card className="border-red-200 bg-red-50" role="alert">
-          <h2 className="font-semibold text-red-900">Dashboard data unavailable</h2>
-          <p className="mt-1 text-sm text-red-700">We couldn't load your latest collection summary. Please try again.</p>
-          <Button variant="secondary" className="mt-4 border-red-200 bg-white" onClick={() => window.location.reload()}>Try again</Button>
+        <Card className="border-danger/30 bg-danger/10" role="alert">
+          <h2 className="font-semibold text-danger">Dashboard data unavailable</h2>
+          <p className="mt-1 text-sm text-danger">We couldn't load your latest collection summary. Please try again.</p>
+          <Button variant="secondary" className="mt-4 border-danger/30" onClick={() => window.location.reload()}>Try again</Button>
         </Card>
       </div>
     );
@@ -115,14 +129,14 @@ export function Dashboard() {
           </Card>
         ) : null}
         <div className="mt-8 max-w-[730px]">
-          <Card className="border-slate-200 p-6 shadow-sm lg:p-7">
+          <Card className="border-line p-6 shadow-sm lg:p-7">
             <div className="mb-5 flex items-start justify-between">
               <div>
                 <h2 className="text-lg font-semibold">Onboarding</h2>
                 <p className="mt-1 text-xs text-muted">Complete these steps to activate your dunning automation.</p>
               </div>
               <span
-                className="rounded-full bg-blue-100 px-3 py-1 text-[10px] font-semibold text-blue-700"
+                className="rounded-full bg-primary/10 px-3 py-1 text-[10px] font-semibold text-primary"
                 role="status"
                 aria-label={`Onboarding ${Math.round((doneCount / steps.length) * 100)}% complete`}
               >
@@ -130,28 +144,28 @@ export function Dashboard() {
               </span>
             </div>
             <div
-              className="mb-6 h-1 overflow-hidden rounded-full bg-blue-100"
+              className="mb-6 h-1 overflow-hidden rounded-full bg-primary/15"
               role="progressbar"
               aria-label="Onboarding progress"
               aria-valuemin={0}
               aria-valuemax={steps.length}
               aria-valuenow={doneCount}
             >
-              <div className="h-full rounded-full bg-[#0739a8] transition-all duration-500" style={{ width: `${(doneCount / steps.length) * 100}%` }} />
+              <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${(doneCount / steps.length) * 100}%` }} />
             </div>
             <ol className="space-y-3">
               {steps.map((step, i) => (
-                <li key={step.href} className={`flex items-center gap-3 rounded-md border px-3 py-3 ${step.done ? "border-slate-200 bg-white" : "border-blue-100 bg-[#f5f7ff]"}`}>
+                <li key={step.href} className={`flex items-center gap-3 rounded-xl border px-3 py-3 ${step.done ? "border-line bg-surface" : "border-primary/20 bg-primary/5"}`}>
                   <span
                     className={
                       "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold " +
-                      (step.done ? "border-emerald-400 bg-emerald-400 text-white" : "border-[#6d7da8] bg-white text-slate-600")
+                      (step.done ? "border-success bg-success text-white" : "border-line bg-surface text-muted")
                     }
                   >
                     {step.done ? "✓" : i + 1}
                   </span>
-                  <Link to={step.href} className={`text-xs font-medium ${step.done ? "text-slate-500" : "text-ink hover:text-primary"}`}>{step.label}</Link>
-                  {!step.done && <span className="ml-auto rounded bg-[#0739a8] px-3 py-1.5 text-[10px] font-semibold text-white">{i === 0 ? "Connect" : "Review"}</span>}
+                  <Link to={step.href} className={`text-xs font-medium ${step.done ? "text-muted" : "text-ink hover:text-primary"}`}>{step.label}</Link>
+                  {!step.done && <span className="ml-auto rounded-full bg-primary px-3 py-1.5 text-[10px] font-semibold text-white">{i === 0 ? "Connect" : "Review"}</span>}
                 </li>
               ))}
             </ol>
@@ -174,7 +188,7 @@ export function Dashboard() {
               { label: "Review invoices", description: "Track your outstanding balance", href: "/invoices" },
               { label: "Add customers", description: "Keep your client records organized", href: "/customers" },
             ].map((item) => (
-              <Link key={item.href} to={item.href} className="rounded-lg border border-slate-200 bg-white p-4 transition-colors hover:border-primary/40 hover:bg-blue-50/40">
+              <Link key={item.href} to={item.href} className="rounded-2xl border border-line bg-surface p-4 transition-colors hover:border-primary/40 hover:bg-primary/5">
                 <div className="text-sm font-semibold text-ink">{item.label}</div>
                 <div className="mt-1 text-xs text-muted">{item.description}</div>
               </Link>
@@ -206,7 +220,7 @@ export function Dashboard() {
                 id="dashboard-range"
                 value={selectedRange}
                 onChange={(event) => setSelectedRange(event.target.value as DashboardRangeKey)}
-                className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-ink shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="h-9 rounded-full border border-line bg-surface px-3 text-sm text-ink shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
               >
                 <option value="7d">7 days</option>
                 <option value="30d">30 days</option>
@@ -236,7 +250,7 @@ export function Dashboard() {
           </Card>
           <Card className="min-h-[132px]">
             <div className="text-sm font-medium text-muted">Recovered (30d)</div>
-            <div className="mt-1 text-2xl font-bold text-green-700">{formatMoney(data.recovered30d, currency)}</div>
+            <div className="mt-1 text-2xl font-bold text-success">{formatMoney(data.recovered30d, currency)}</div>
             <div className="mt-1 text-xs text-muted">{data.paidCount30d} paid invoices</div>
           </Card>
           <Card className="min-h-[132px]">
@@ -274,9 +288,10 @@ export function Dashboard() {
           </Card>
           <Card>
             <div className="text-sm font-medium text-muted">Cash collected</div>
-            <div className="mt-1 text-2xl font-bold">
+            <div className="mt-1 text-2xl font-semibold tracking-tight">
               {formatMoney((data.cashCollected ?? []).reduce((sum, row) => sum + row.amount, 0), currency)}
             </div>
+            <Sparkline values={(data.cashCollected ?? []).map((row) => row.amount)} />
             <div className="mt-1 text-xs text-muted">
               {(data.dsoTrend ?? []).length
                 ? `DSO by week: ${(data.dsoTrend ?? []).map((p) => (p.days == null ? "—" : `${p.days}d`)).join(" · ")}`
@@ -299,9 +314,9 @@ export function Dashboard() {
               <Link to="/invoices" className="text-sm font-medium text-primary hover:underline">View invoices</Link>
             </div>
             {data.aging.length === 0 ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-emerald-50 px-4 py-3">
-                <p className="text-sm text-emerald-800">Nothing overdue right now. Nice work.</p>
-                <Link to="/invoices" className="text-sm font-medium text-emerald-800 hover:underline">View open invoices</Link>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-success/10 px-4 py-3">
+                <p className="text-sm text-success">Nothing overdue right now. Nice work.</p>
+                <Link to="/invoices" className="text-sm font-medium text-success hover:underline">View open invoices</Link>
               </div>
             ) : (
               <div className="space-y-4" role="list" aria-label="Overdue invoice aging">
@@ -314,7 +329,7 @@ export function Dashboard() {
                       </span>
                     </div>
                     <div
-                      className="h-2 overflow-hidden rounded-full bg-slate-100"
+                      className="h-2 overflow-hidden rounded-full bg-bg"
                       role="progressbar"
                       aria-label={`${AGING_LABELS[a.bucket] ?? a.bucket}: ${formatMoney(a.amount, currency)}`}
                       aria-valuemin={0}
@@ -322,7 +337,7 @@ export function Dashboard() {
                       aria-valuenow={a.amount}
                     >
                       <div
-                        className="h-full rounded-full bg-amber-500"
+                        className="h-full rounded-full bg-warning"
                         style={{ width: `${Math.max((a.amount / maxAging) * 100, 4)}%` }}
                       />
                     </div>

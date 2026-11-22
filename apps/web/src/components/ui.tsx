@@ -8,10 +8,10 @@ export function cn(...inputs: ClassValue[]) {
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 
 const buttonStyles: Record<ButtonVariant, string> = {
-  primary: "bg-primary hover:bg-primary-hover text-white",
-  secondary: "bg-surface border border-slate-200 text-ink hover:bg-slate-50",
-  ghost: "text-primary hover:bg-blue-50",
-  danger: "bg-danger hover:bg-red-700 text-white",
+  primary: "bg-primary hover:bg-primary-hover text-white shadow-sm",
+  secondary: "bg-surface border border-line text-ink hover:bg-bg",
+  ghost: "text-primary hover:bg-primary/10",
+  danger: "bg-danger text-white hover:opacity-90",
 };
 
 export function Button({
@@ -23,7 +23,7 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+        "inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition duration-200 active:scale-[0.98]",
         "disabled:opacity-50 disabled:cursor-not-allowed",
         buttonStyles[variant],
         className,
@@ -37,29 +37,29 @@ export function Button({
 
 export function Card({ className, children }: HTMLAttributes<HTMLDivElement> & { children: ReactNode }) {
   return (
-    <div className={cn("rounded-xl border border-slate-200 bg-surface p-6 shadow-sm", className)}>
+    <div className={cn("rounded-2xl border border-line bg-surface p-6 shadow-card", className)}>
       {children}
     </div>
   );
 }
 
 const badgeTones: Record<string, string> = {
-  open: "bg-blue-50 text-blue-700 border-blue-200",
-  paid: "bg-green-50 text-green-700 border-green-200",
-  overdue: "bg-amber-50 text-amber-700 border-amber-200",
-  paused: "bg-orange-50 text-orange-700 border-orange-200",
-  void: "bg-slate-100 text-slate-600 border-slate-200",
-  uncollectible: "bg-red-50 text-red-700 border-red-200",
-  sent: "bg-blue-50 text-blue-700 border-blue-200",
-  delivered: "bg-slate-100 text-slate-700 border-slate-200",
-  opened: "bg-blue-50 text-blue-700 border-blue-200",
-  clicked: "bg-green-50 text-green-700 border-green-200",
-  bounced: "bg-red-50 text-red-700 border-red-200",
-  failed: "bg-red-50 text-red-700 border-red-200",
-  dispute: "bg-red-50 text-red-700 border-red-200",
-  promise: "bg-green-50 text-green-700 border-green-200",
-  question: "bg-blue-50 text-blue-700 border-blue-200",
-  junk: "bg-slate-100 text-slate-600 border-slate-200",
+  open: "bg-primary/10 text-primary border-primary/20",
+  paid: "bg-success/10 text-success border-success/25",
+  overdue: "bg-warning/15 text-warning border-warning/30",
+  paused: "bg-warning/15 text-warning border-warning/30",
+  void: "bg-bg text-muted border-line",
+  uncollectible: "bg-danger/10 text-danger border-danger/25",
+  sent: "bg-primary/10 text-primary border-primary/20",
+  delivered: "bg-bg text-ink border-line",
+  opened: "bg-primary/10 text-primary border-primary/20",
+  clicked: "bg-success/10 text-success border-success/25",
+  bounced: "bg-danger/10 text-danger border-danger/25",
+  failed: "bg-danger/10 text-danger border-danger/25",
+  dispute: "bg-danger/10 text-danger border-danger/25",
+  promise: "bg-success/10 text-success border-success/25",
+  question: "bg-primary/10 text-primary border-primary/20",
+  junk: "bg-bg text-muted border-line",
 };
 
 export function Badge({ tone, children }: { tone: string; children: ReactNode }) {
@@ -67,7 +67,7 @@ export function Badge({ tone, children }: { tone: string; children: ReactNode })
     <span
       className={cn(
         "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium capitalize",
-        badgeTones[tone] ?? "bg-slate-100 text-slate-600 border-slate-200",
+        badgeTones[tone] ?? "bg-bg text-muted border-line",
       )}
     >
       {children}
@@ -80,7 +80,7 @@ export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...props}
       className={cn(
-        "w-full rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm outline-none",
+        "w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink outline-none",
         "focus:ring-2 focus:ring-primary/30 focus:border-primary",
         props.className,
       )}
@@ -93,7 +93,7 @@ export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
     <textarea
       {...props}
       className={cn(
-        "w-full rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm outline-none",
+        "w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink outline-none",
         "focus:ring-2 focus:ring-primary/30 focus:border-primary",
         props.className,
       )}
@@ -132,7 +132,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
   return (
     <div className="mb-6 flex items-start justify-between">
       <div>
-        <h1 className="text-2xl font-bold">{title}</h1>
+        <h1 className="text-[1.75rem] font-semibold tracking-tight">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
       </div>
       {actions && <div className="flex gap-2">{actions}</div>}
@@ -154,7 +154,7 @@ export function Pagination({
   if (page === 0 && !hasMore) return null;
 
   return (
-    <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
+    <div className="flex items-center justify-between border-t border-line px-4 py-3">
       <span className="text-sm text-muted">Page {page + 1}</span>
       <div className="flex gap-2">
         <Button

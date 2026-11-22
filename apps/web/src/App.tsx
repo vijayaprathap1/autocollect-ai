@@ -35,7 +35,7 @@ export function Shell() {
     if (error.code === "TENANT_SUSPENDED") {
       return (
         <FullPage>
-          <div className="max-w-md rounded-xl border border-slate-200 bg-surface p-6 text-center shadow-sm">
+          <div className="max-w-md rounded-2xl border border-line bg-surface p-6 text-center shadow-card">
             <h1 className="text-lg font-semibold">Workspace suspended</h1>
             <p className="mt-2 text-sm text-muted">This workspace has been suspended. Contact support to restore access.</p>
             <button className="mt-4 text-sm font-medium text-primary hover:underline" onClick={() => logout().finally(() => window.location.assign("/login"))}>
@@ -102,12 +102,12 @@ export function AdminShell() {
   if (error || !data) return <FullPage><p className="text-sm text-danger">Failed to load the admin console.</p></FullPage>;
   if (data.user.sessionType !== "admin" || !data.user.isSuperAdmin) return <Navigate to="/dashboard" replace />;
   return (
-    <div className="min-h-screen bg-[#f5f7fb]">
-      <header className="flex h-16 items-center justify-between bg-[#091525] px-4 text-white sm:px-8">
-        <span className="font-semibold">
-          AutoCollect AI <span className="ml-2 text-xs font-normal text-slate-400">Platform Admin · {data.user.email}</span>
+    <div className="min-h-screen bg-bg text-ink">
+      <header className="flex h-14 items-center justify-between border-b border-line bg-surface/80 px-4 backdrop-blur-xl sm:px-8">
+        <span className="font-semibold tracking-tight">
+          AutoCollect AI <span className="ml-2 text-xs font-normal text-muted">Platform Admin · {data.user.email}</span>
         </span>
-        <button className="text-sm text-slate-300 hover:text-white" onClick={() => logout().finally(() => window.location.assign("/admin/login"))}>
+        <button className="text-sm text-muted hover:text-ink" onClick={() => logout().finally(() => window.location.assign("/admin/login"))}>
           Sign out
         </button>
       </header>
