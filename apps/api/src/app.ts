@@ -6,6 +6,7 @@ import multipart from "@fastify/multipart";
 import rawBody from "fastify-raw-body";
 import { Redis } from "ioredis";
 import { randomUUID } from "node:crypto";
+import { createGzip } from "node:zlib";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { ZodError } from "zod";
@@ -31,6 +32,7 @@ import { settingsRoutes } from "./modules/settings/settings.controller.js";
 import { privacyRoutes } from "./modules/privacy/privacy.controller.js";
 import { customerRoutes } from "./modules/customers/customers.controller.js";
 import { collectionRoutes } from "./modules/collections/collections.controller.js";
+import { enterpriseRoutes } from "./modules/enterprise/enterprise.controller.js";
 import { cronRoutes } from "./modules/cron/cron.controller.js";
 import { demoRoutes } from "./modules/demo/demo.controller.js";
 import { adminRoutes } from "./modules/admin/admin.controller.js";
@@ -164,6 +166,25 @@ export function buildApp() {
     crossOriginResourcePolicy: { policy: "same-site" },
     strictTransportSecurity: isProduction ? { maxAge: 63072000, includeSubDomains: true, preload: false } : false,
   });
+  if (serveWeb) {
+    app.addHook("onSend", async (req, reply, payload) => {
+      if (req.method === "HEAD" || payload == null || reply.getHeader("content-encoding")) return payload;
+      const accept = String(req.headers["accept-encoding"] ?? "");
+      if (!/\bgzip\b/.test(accept)) return payload;
+      const type = String(reply.getHeader("content-type") ?? "");
+      if (!/json|text|javascript|xml|svg|css/.test(type)) return payload;
+      reply.header("vary", "accept-encoding");
+      reply.header("content-encoding", "gzip");
+      reply.removeHeader("content-length");
+      const gzip = createGzip();
+      if (typeof (payload as { pipe?: (dest: unknown) => unknown }).pipe === "function") {
+        return (payload as NodeJS.ReadableStream).pipe(gzip);
+      }
+      const body = typeof payload === "string" || Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload));
+      gzip.end(body);
+      return gzip;
+    });
+  }
   void app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 5 } });
   void app.register(rawBody, { field: "rawBody", global: false, encoding: false, runFirst: true });
 
@@ -269,6 +290,7 @@ export function buildApp() {
       void api.register(privacyRoutes);
       void api.register(customerRoutes);
       void api.register(collectionRoutes);
+      void api.register(enterpriseRoutes);
       void api.register(cronRoutes);
       void api.register(demoRoutes);
       void api.register(adminRoutes);

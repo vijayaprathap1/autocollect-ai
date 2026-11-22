@@ -9,8 +9,8 @@
   --ink: 29 29 31;
   --muted: 110 110 115;
   --line: 220 220 224;
-  --color-primary: 0 113 227;
-  --color-primary-hover: 0 84 176;
+  --color-primary: 0 84 176;
+  --color-primary-hover: 0 64 140;
   --danger: 215 0 21;
   --success: 28 122 58;
   --shadow: 0 1px 1px rgb(0 0 0 / 0.04), 0 12px 32px rgb(0 0 0 / 0.05);

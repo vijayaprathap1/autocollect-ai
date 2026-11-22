@@ -134,6 +134,54 @@ export async function qboQueryInvoices(
   return all;
 }
 
+export type QboPaymentLike = {
+  Id: string;
+  TotalAmt?: string | number;
+  TxnDate?: string;
+  CurrencyRef?: { value?: string };
+  CustomerRef?: { value?: string; name?: string };
+  Line?: { Amount?: string | number; LinkedTxn?: { TxnId?: string; TxnType?: string }[] }[];
+};
+
+/** Payments received in QuickBooks. LinkedTxn lines point at the invoices they close. */
+export async function qboQueryPayments(accessToken: string, realmId: string, changedSince?: string): Promise<QboPaymentLike[]> {
+  const where = changedSince && !Number.isNaN(Date.parse(changedSince))
+    ? ` WHERE Metadata.LastUpdatedTime > '${new Date(changedSince).toISOString()}'`
+    : "";
+  const all: QboPaymentLike[] = [];
+  const pageSize = 1000;
+  for (let start = 1; start < 100_000; start += pageSize) {
+    const q = `SELECT * FROM Payment${where} STARTPOSITION ${start} MAXRESULTS ${pageSize}`;
+    const url = `${API_BASE}/${encodeURIComponent(realmId)}/query?query=${encodeURIComponent(q)}&minorversion=73`;
+    const res = await fetchWithTimeout(url, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+    }, config.providerTimeoutMs);
+    if (res.status === 401 || res.status === 403) throw new QboAuthError(`QuickBooks authorization failed (${res.status})`);
+    if (!res.ok) {
+      const detail = await res.text();
+      throw new Error(`QBO query error ${res.status}: ${detail.slice(0, 300)}`);
+    }
+    const body = (await res.json()) as { QueryResponse?: { Payment?: QboPaymentLike[] } };
+    const page = body.QueryResponse?.Payment ?? [];
+    all.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return all;
+}
+
+export function qboMockPayments(): QboPaymentLike[] {
+  return [
+    {
+      Id: "p103",
+      TotalAmt: 3200,
+      TxnDate: "2026-08-02",
+      CurrencyRef: { value: "USD" },
+      CustomerRef: { value: "c3", name: "Lumen Labs" },
+      Line: [{ Amount: 3200, LinkedTxn: [{ TxnId: "103", TxnType: "Invoice" }] }],
+    },
+  ];
+}
+
 /** Deterministic mock invoices so the sync flow works with no Intuit credentials. */
 export function qboMockInvoices(): QboInvoiceLike[] {
   return [

@@ -78,7 +78,7 @@ export type TenantBranding = {
   businessAddress?: string;
 };
 
-export type Role = "owner" | "admin" | "member";
+export type Role = "owner" | "admin" | "manager" | "collector" | "viewer" | "member";
 
 export type MeResponse = {
   user: {
@@ -587,6 +587,39 @@ export function useApiMutation<TData, TVariables, TError extends ApiClientError,
     onError: (error) => showToast(error.message, "error"),
   });
 }
+
+export type CashPayment = { id: string; customer_id: string | null; customer_name: string | null; source: string; external_id: string; amount: number; unapplied: number; currency: string; reference: string | null };
+export const getCashPayments = () => api.get<{ payments: CashPayment[] }>("/cash/payments?unapplied=1");
+export const recordCash = (body: { customerId?: string | null; externalId: string; amount: number; currency?: string; reference?: string }) =>
+  api.post<{ payment: { id: string } }>("/cash/payments", body);
+export const cashSuggestions = (id: string) => api.get<{ suggestions: { invoiceId: string; amount: number; method: string; reason: string; confidence: number }[] }>(`/cash/payments/${id}/suggestions`);
+export const applyCash = (id: string, lines: { invoiceId: string; amount: number }[], acceptSuggestion = false) =>
+  api.post(`/cash/payments/${id}/apply`, { lines, acceptSuggestion });
+export const dismissCash = (id: string) => api.post<{ ok: boolean }>(`/cash/payments/${id}/dismiss`);
+export async function importCashCsv(file: File): Promise<{ imported: number; failed: number; errors: { row: number; error: string }[] }> {
+  const fd = new FormData();
+  fd.append("file", file);
+  return request("/cash/import", { method: "POST", body: fd });
+}
+export const getSavedFilters = () => api.get<{ filters: { id: string; name: string; scope: string; query: Record<string, string> }[] }>("/filters");
+export const saveFilter = (body: { name: string; scope: "invoices" | "worklist" | "cash" | "disputes"; query: Record<string, string> }) =>
+  api.post("/filters", body);
+export const markNotificationRead = (id: string) => api.post(`/notifications/${id}/read`);
+
+export type CreditRow = { id: string; name: string | null; creditLimit: number | null; creditStatus: string; riskScore: number; exposure: number; recommended: string; reason: string | null };
+export const getCredit = () => api.get<{ customers: CreditRow[] }>("/credit/customers");
+export const setCredit = (id: string, body: { creditLimit?: number | null; creditStatus?: string; holdReason?: string | null }) =>
+  api.patch(`/credit/customers/${id}`, body);
+
+export const getForecast = (grain: "week" | "month" = "week") =>
+  api.get<{ grain: string; keepRate: number; buckets: { period: string; expectedCents: number; invoiceCount: number }[] }>(`/forecast?grain=${grain}`);
+export const getProcessAnalytics = () =>
+  api.get<{ funnel: { bucket: string; count: number; amount: number }[]; collectors: { email: string | null; accounts: number; collected: number }[]; steps: { channel: string; step_index: number; sent: number; engaged: number }[]; bottlenecks: { kind: string; count: number }[] }>("/analytics/process");
+
+export const bulkInvoices = (ids: string[], action: "pause" | "resume") => api.post<{ updated: number }>("/invoices/bulk", { ids, action });
+export const exportInvoicesUrl = (format: "csv" | "xls" = "csv") => apiUrl(`/exports/invoices?format=${format}`);
+export const searchWorkspace = (q: string) => api.get<{ customers: { id: string; name: string | null }[]; invoices: { id: string; external_id: string | null }[] }>(`/search?q=${encodeURIComponent(q)}`);
+export const getNotifications = () => api.get<{ notifications: { id: string; title: string; body: string | null; href: string | null; read_at: string | null }[] }>("/notifications");
 
 /** Human message for any thrown value. */
 export function errorMessage(err: unknown, fallback = "Something went wrong"): string {

@@ -3,7 +3,7 @@ import type { PoolClient } from "pg";
 import { parse as parseCsv } from "csv-parse/sync";
 import { requireRole } from "../../plugins/tenant.js";
 import { ApiError, badRequest } from "../../lib/errors.js";
-import { assertInvoiceCapacity } from "../../lib/billing.js";
+import { tenantPlan } from "../../lib/billing.js";
 
 type CsvRow = Record<string, string>;
 
@@ -91,17 +91,22 @@ function customerKey(name: string | undefined, email: string | undefined): strin
   return email ? `email:${email.toLowerCase()}` : `name:${(name ?? "").trim().toLowerCase()}`;
 }
 
-async function importOneRow(
-  client: PoolClient,
-  r: CsvRow,
-  mapping: Record<string, string>,
-  tenantId: string,
-  workflowId: string | null,
-  defaultCurrency: string,
-  dayFirst: boolean,
-): Promise<string> {
-  const get = (field: string) => (mapping[field] ? r[mapping[field]]?.trim() : undefined) || undefined;
+type ParsedInvoice = {
+  row: number;
+  invoiceNumber: string;
+  amountCents: number;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  customerExternalId: string;
+  currency: string;
+  issueDate: string | null;
+  dueDate: string | null;
+  payLink: string | null;
+};
 
+function parseInvoiceRow(r: CsvRow, mapping: Record<string, string>, row: number, defaultCurrency: string, dayFirst: boolean): ParsedInvoice {
+  const get = (field: string) => (mapping[field] ? r[mapping[field]]?.trim() : undefined) || undefined;
   const invoiceNumber = get("invoiceNumber");
   if (!invoiceNumber) throw new RowError("missing invoice number");
   const amountCents = toCents(get("amount"));
@@ -117,35 +122,87 @@ async function importOneRow(
   if (rawDue && !dueDate) throw new RowError(`invalid due date "${rawDue}"`);
   const payLink = get("payLink");
   if (payLink && !/^https:\/\//i.test(payLink)) throw new RowError("payment link must start with https://");
+  return {
+    row,
+    invoiceNumber,
+    amountCents,
+    name: name ?? null,
+    email: email ?? null,
+    phone: get("phone") ?? null,
+    customerExternalId: customerKey(name, email),
+    currency,
+    issueDate: parseCalendarDate(get("issueDate"), dayFirst),
+    dueDate,
+    payLink: payLink ?? null,
+  };
+}
 
-  await assertInvoiceCapacity(client, tenantId, "csv", invoiceNumber);
+/** One INSERT for many customers. Returns external id -> customer id. */
+async function insertCustomers(
+  client: PoolClient,
+  tenantId: string,
+  customers: Map<string, { externalId: string; name: string | null; email: string | null; phone: string | null }>,
+): Promise<Map<string, string>> {
+  const ids = new Map<string, string>();
+  const list = [...customers.values()];
+  const chunkSize = 200;
+  for (let i = 0; i < list.length; i += chunkSize) {
+    const chunk = list.slice(i, i + chunkSize);
+    const values: unknown[] = [];
+    const tuples = chunk.map((c, n) => {
+      const base = n * 5;
+      values.push(tenantId, c.externalId, c.name, c.email, c.phone);
+      return `($${base + 1}, 'csv', $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`;
+    });
+    const inserted = await client.query<{ id: string; external_id: string }>(
+      `INSERT INTO customers (tenant_id, source, external_id, name, email, phone)
+       VALUES ${tuples.join(", ")}
+       ON CONFLICT (tenant_id, source, external_id)
+       DO UPDATE SET name = COALESCE(EXCLUDED.name, customers.name),
+                     email = COALESCE(EXCLUDED.email, customers.email),
+                     phone = COALESCE(EXCLUDED.phone, customers.phone)
+       RETURNING id, external_id`,
+      values,
+    );
+    for (const row of inserted.rows) ids.set(row.external_id, row.id);
+  }
+  return ids;
+}
 
-  const cu = await client.query<{ id: string }>(
-    `INSERT INTO customers (tenant_id, source, external_id, name, email, phone)
-     VALUES ($1, 'csv', $2, $3, $4, $5)
-     ON CONFLICT (tenant_id, source, external_id)
-     DO UPDATE SET name = COALESCE(EXCLUDED.name, customers.name),
-                   email = COALESCE(EXCLUDED.email, customers.email),
-                   phone = COALESCE(EXCLUDED.phone, customers.phone)
-     RETURNING id`,
-    [tenantId, customerKey(name, email), name ?? null, email ?? null, get("phone") ?? null],
-  );
-
-  await client.query(
-    `INSERT INTO invoices (tenant_id, customer_id, external_id, source, amount_due, currency, issue_date, due_date,
-                           status, payment_link, workflow_id)
-     VALUES ($1, $2, $3, 'csv', $4, $5, $6, $7, 'open', $8, $9)
-     ON CONFLICT (tenant_id, source, external_id)
-     DO UPDATE SET amount_due = EXCLUDED.amount_due,
-                   currency = EXCLUDED.currency,
-                   customer_id = EXCLUDED.customer_id,
-                   issue_date = COALESCE(EXCLUDED.issue_date, invoices.issue_date),
-                   due_date = COALESCE(EXCLUDED.due_date, invoices.due_date),
-                   payment_link = COALESCE(EXCLUDED.payment_link, invoices.payment_link),
-                   updated_at = now()`,
-    [tenantId, cu.rows[0].id, invoiceNumber, amountCents, currency, parseCalendarDate(get("issueDate"), dayFirst), dueDate, payLink ?? null, workflowId],
-  );
-  return invoiceNumber;
+/** One INSERT for many invoices. Duplicate numbers in one statement are already folded. */
+async function insertInvoices(
+  client: PoolClient,
+  tenantId: string,
+  workflowId: string | null,
+  invoices: ParsedInvoice[],
+  customerIds: Map<string, string>,
+): Promise<void> {
+  const chunkSize = 100;
+  for (let i = 0; i < invoices.length; i += chunkSize) {
+    const chunk = invoices.slice(i, i + chunkSize);
+    const values: unknown[] = [];
+    const tuples = chunk.map((inv, n) => {
+      const base = n * 9;
+      const customerId = customerIds.get(inv.customerExternalId);
+      if (!customerId) throw new RowError("missing client");
+      values.push(tenantId, customerId, inv.invoiceNumber, inv.amountCents, inv.currency, inv.issueDate, inv.dueDate, inv.payLink, workflowId);
+      return `($${base + 1}, $${base + 2}, $${base + 3}, 'csv', $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, 'open', $${base + 8}, $${base + 9})`;
+    });
+    await client.query(
+      `INSERT INTO invoices (tenant_id, customer_id, external_id, source, amount_due, currency, issue_date, due_date,
+                             status, payment_link, workflow_id)
+       VALUES ${tuples.join(", ")}
+       ON CONFLICT (tenant_id, source, external_id)
+       DO UPDATE SET amount_due = EXCLUDED.amount_due,
+                     currency = EXCLUDED.currency,
+                     customer_id = EXCLUDED.customer_id,
+                     issue_date = COALESCE(EXCLUDED.issue_date, invoices.issue_date),
+                     due_date = COALESCE(EXCLUDED.due_date, invoices.due_date),
+                     payment_link = COALESCE(EXCLUDED.payment_link, invoices.payment_link),
+                     updated_at = now()`,
+      values,
+    );
+  }
 }
 
 class RowError extends Error {}
@@ -204,20 +261,77 @@ export async function csvRoutes(app: FastifyInstance) {
           [tenantId],
         );
         const { workflow_id: workflowId, currency } = meta.rows[0];
-
+        const parsed: ParsedInvoice[] = [];
         for (let i = 0; i < records.length; i++) {
-          await client.query("SAVEPOINT csv_row");
           try {
-            await importOneRow(client, records[i], mapping, tenantId, workflowId, currency ?? "usd", dayFirst);
-            await client.query("RELEASE SAVEPOINT csv_row");
-            imported += 1;
+            parsed.push(parseInvoiceRow(records[i], mapping, i + 2, currency ?? "usd", dayFirst));
           } catch (err) {
-            await client.query("ROLLBACK TO SAVEPOINT csv_row");
-            const msg = err instanceof RowError || err instanceof ApiError ? err.message : "could not import this row";
-            if (!(err instanceof RowError || err instanceof ApiError)) req.log.warn({ err, row: i + 2 }, "csv row failed");
-            errors.push({ row: i + 2, error: msg });
+            errors.push({ row: i + 2, error: err instanceof RowError ? err.message : "could not import this row" });
           }
         }
+
+        const { invoiceLimit } = await tenantPlan(client, tenantId);
+        const accepted: ParsedInvoice[] = [];
+        if (invoiceLimit === null) {
+          accepted.push(...parsed);
+        } else {
+          const numbers = [...new Set(parsed.map((row) => row.invoiceNumber))];
+          const existing = new Set<string>();
+          if (numbers.length) {
+            const found = await client.query<{ external_id: string }>(
+              `SELECT external_id FROM invoices WHERE tenant_id = $1 AND source = 'csv' AND external_id = ANY($2::text[])`,
+              [tenantId, numbers],
+            );
+            for (const row of found.rows) existing.add(row.external_id);
+          }
+          const open = await client.query<{ count: number }>(
+            `SELECT count(*)::int AS count FROM invoices WHERE tenant_id = $1 AND status IN ('open', 'paused')`,
+            [tenantId],
+          );
+          let room = invoiceLimit - (open.rows[0]?.count ?? 0);
+          const reserved = new Set<string>();
+          for (const row of parsed) {
+            if (existing.has(row.invoiceNumber) || reserved.has(row.invoiceNumber)) {
+              accepted.push(row);
+              continue;
+            }
+            if (room <= 0) {
+              errors.push({
+                row: row.row,
+                error: `Your plan tracks up to ${invoiceLimit} open invoices. Upgrade for unlimited invoices.`,
+              });
+              continue;
+            }
+            room -= 1;
+            reserved.add(row.invoiceNumber);
+            accepted.push(row);
+          }
+        }
+
+        const customers = new Map<string, { externalId: string; name: string | null; email: string | null; phone: string | null }>();
+        const invoices = new Map<string, ParsedInvoice>();
+        for (const row of accepted) {
+          const prevCustomer = customers.get(row.customerExternalId);
+          customers.set(row.customerExternalId, {
+            externalId: row.customerExternalId,
+            name: row.name ?? prevCustomer?.name ?? null,
+            email: row.email ?? prevCustomer?.email ?? null,
+            phone: row.phone ?? prevCustomer?.phone ?? null,
+          });
+          const prevInvoice = invoices.get(row.invoiceNumber);
+          invoices.set(row.invoiceNumber, {
+            ...row,
+            issueDate: row.issueDate ?? prevInvoice?.issueDate ?? null,
+            dueDate: row.dueDate ?? prevInvoice?.dueDate ?? null,
+            payLink: row.payLink ?? prevInvoice?.payLink ?? null,
+          });
+        }
+        if (customers.size) {
+          const customerIds = await insertCustomers(client, tenantId, customers);
+          await insertInvoices(client, tenantId, workflowId, [...invoices.values()], customerIds);
+        }
+        imported = accepted.length;
+        errors.sort((a, b) => a.row - b.row);
         await client.query(`INSERT INTO audit_log (tenant_id, actor, action, detail) VALUES ($1, $2, 'csv_imported', $3::jsonb)`, [
           tenantId,
           req.user.email,

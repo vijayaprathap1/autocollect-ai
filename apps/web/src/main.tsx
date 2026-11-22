@@ -30,6 +30,10 @@ const Worklist = lazy(() => import("./pages/Worklist").then((m) => ({ default: m
 const Disputes = lazy(() => import("./pages/Disputes").then((m) => ({ default: m.Disputes })));
 const DisputeDetail = lazy(() => import("./pages/DisputeDetail").then((m) => ({ default: m.DisputeDetail })));
 const Promises = lazy(() => import("./pages/Promises").then((m) => ({ default: m.Promises })));
+const Cash = lazy(() => import("./pages/Cash").then((m) => ({ default: m.Cash })));
+const Credit = lazy(() => import("./pages/Credit").then((m) => ({ default: m.Credit })));
+const Forecast = lazy(() => import("./pages/Forecast").then((m) => ({ default: m.Forecast })));
+const Analytics = lazy(() => import("./pages/Analytics").then((m) => ({ default: m.Analytics })));
 const Workflows = lazy(() => import("./pages/Workflows").then((m) => ({ default: m.Workflows })));
 const Templates = lazy(() => import("./pages/Templates").then((m) => ({ default: m.Templates })));
 const Activity = lazy(() => import("./pages/Activity").then((m) => ({ default: m.Activity })));
@@ -104,6 +108,10 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/disputes" element={<Page><Disputes /></Page>} />
               <Route path="/disputes/:id" element={<Page><DisputeDetail /></Page>} />
               <Route path="/promises" element={<Page><Promises /></Page>} />
+              <Route path="/cash" element={<Page><Cash /></Page>} />
+              <Route path="/credit" element={<Page><Credit /></Page>} />
+              <Route path="/forecast" element={<Page><Forecast /></Page>} />
+              <Route path="/analytics" element={<Page><Analytics /></Page>} />
               <Route path="/workflows" element={<Page><Workflows /></Page>} />
               <Route path="/templates" element={<Page><Templates /></Page>} />
               <Route path="/activity" element={<Page><Activity /></Page>} />

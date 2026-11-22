@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Badge, Button, Card, EmptyState, Input, PageHeader, Pagination, Spinner, useToast } from "@/components/ui";
 import { useConfirmDialog } from "@/components/ConfirmDialog";
-import { getInvoices, invoiceAction, type InvoiceDto } from "@/lib/api";
+import { bulkInvoices, exportInvoicesUrl, getInvoices, invoiceAction, saveFilter, type InvoiceDto } from "@/lib/api";
 import { daysUntil, formatDate, formatMoney } from "@/lib/format";
 import { useMe } from "@/lib/me";
 
@@ -25,6 +25,8 @@ export function Invoices() {
   const [source, setSource] = useState<string>("all");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(0);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [filterName, setFilterName] = useState("");
   const pageSize = 25;
 
   const statusParam = filter === "all" ? undefined : filter;
@@ -77,7 +79,21 @@ export function Invoices() {
 
   return (
     <div>
-      <PageHeader title="Invoices" subtitle="Track what's owed and what's on the way." />
+      <PageHeader
+        title="Invoices"
+        subtitle="Track what's owed and what's on the way."
+        actions={
+          <span className="flex gap-2">
+            {selected.length > 0 && (
+              <Button type="button" variant="secondary" onClick={() => bulkInvoices(selected, "pause").then((r) => { showToast(`Paused ${r.updated}`, "success"); setSelected([]); void refetch(); }).catch((e) => showToast((e as Error).message, "error"))}>
+                Pause selected
+              </Button>
+            )}
+            <a className="rounded-full border border-line px-4 py-2 text-sm" href={exportInvoicesUrl("csv")}>CSV</a>
+            <a className="rounded-full border border-line px-4 py-2 text-sm" href={exportInvoicesUrl("xls")}>Excel</a>
+          </span>
+        }
+      />
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex gap-1 rounded-lg border border-line bg-surface p-1">
@@ -97,6 +113,10 @@ export function Invoices() {
             </button>
           ))}
         </div>
+        <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (!filterName.trim()) return; saveFilter({ name: filterName.trim(), scope: "invoices", query: { status: filter, source, q } }).then(() => { setFilterName(""); showToast("View saved", "success"); }).catch((err) => showToast((err as Error).message, "error")); }}>
+          <Input aria-label="Saved view name" value={filterName} onChange={(e) => setFilterName(e.target.value)} placeholder="Save this view" />
+          <Button type="submit" variant="secondary" disabled={!filterName.trim()}>Save</Button>
+        </form>
         <select
           value={source}
           onChange={(e) => {
@@ -145,6 +165,7 @@ export function Invoices() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
+                <th className="px-4 py-3 font-medium"><span className="sr-only">Select</span></th>
                 <th className="px-4 py-3 font-medium">Client</th>
                 <th className="px-4 py-3 font-medium">Amount</th>
                 <th className="px-4 py-3 font-medium">Due</th>
@@ -169,6 +190,9 @@ export function Invoices() {
                       : "—";
                 return (
                   <tr key={inv.id} className="border-b border-line last:border-0 hover:bg-bg">
+                    <td className="px-4 py-3">
+                      <input aria-label={`Select ${inv.externalId ?? inv.id}`} type="checkbox" checked={selected.includes(inv.id)} onChange={(e) => setSelected((cur) => e.target.checked ? [...cur, inv.id] : cur.filter((id) => id !== inv.id))} />
+                    </td>
                     <td className="px-4 py-3">
                       <Link to={`/invoices/${inv.id}`} className="font-medium text-ink hover:text-primary">
                         {inv.customerName ?? "Unknown client"}

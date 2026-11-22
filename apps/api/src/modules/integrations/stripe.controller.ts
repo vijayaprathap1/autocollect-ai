@@ -14,6 +14,7 @@ import {
   markInvoicePaid,
   markInvoicePaidById,
   recordPaymentFailure,
+  recordUnappliedStripeCash,
   tenantByStripeAccount,
   type StripeInvoiceLike,
 } from "./ingest.service.js";
@@ -407,6 +408,8 @@ export async function stripeRoutes(app: FastifyInstance) {
       "invoice.paid",
       "invoice.payment_failed",
       "checkout.session.completed",
+      "charge.succeeded",
+      "payout.paid",
     ];
     if (!handled.includes(event.type)) return reply.send({ received: true, ignored: event.type });
     if (!(await claimWebhookEvent(event.id, "stripe", conn.tenantId))) return reply.send({ received: true, duplicate: true });
@@ -436,6 +439,32 @@ export async function stripeRoutes(app: FastifyInstance) {
             invoiceId = link.metadata?.autocollect_invoice_id;
           }
           if (invoiceId) await markInvoicePaidById(conn.tenantId, invoiceId);
+          break;
+        }
+        case "charge.succeeded": {
+          // Invoice payments are booked by invoice.paid. A charge with no invoice waits to be matched.
+          if (object.invoice) break;
+          const amount = Number(object.amount);
+          if (object.id && Number.isInteger(amount)) {
+            await recordUnappliedStripeCash(conn.tenantId, {
+              externalId: String(object.id),
+              amount,
+              currency: String(object.currency ?? "usd"),
+              reference: "Stripe charge",
+            });
+          }
+          break;
+        }
+        case "payout.paid": {
+          const amount = Number(object.amount);
+          if (object.id && Number.isInteger(amount)) {
+            await recordUnappliedStripeCash(conn.tenantId, {
+              externalId: String(object.id),
+              amount,
+              currency: String(object.currency ?? "usd"),
+              reference: "Stripe payout",
+            });
+          }
           break;
         }
       }

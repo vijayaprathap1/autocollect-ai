@@ -69,7 +69,7 @@ export default fp(async (app: FastifyInstance) => {
   app.addHook("onRequestAbort", async (req) => release(req));
 });
 
-const RANK: Record<UserRole, number> = { member: 0, admin: 1, owner: 2 };
+const RANK: Record<UserRole, number> = { viewer: 0, member: 1, collector: 1, manager: 2, admin: 3, owner: 4 };
 
 /** Guard a route handler by minimum role. */
 export function requireRole(role: UserRole) {

@@ -1,6 +1,6 @@
 export type TenantTone = "friendly" | "professional" | "firm";
 
-export type UserRole = "owner" | "admin" | "member";
+export type UserRole = "owner" | "admin" | "manager" | "collector" | "viewer" | "member";
 
 export type IntegrationSource = "stripe" | "qbo" | "csv";
 export type IntegrationStatus = "active" | "error" | "disconnected";
