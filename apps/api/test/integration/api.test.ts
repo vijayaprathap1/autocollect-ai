@@ -97,7 +97,9 @@ d("API integration", () => {
     expect((await call(null, "GET", "/health")).status).toBe(200);
     const ready = await call(null, "GET", "/ready");
     expect(ready.status).toBe(200);
-    expect(ready.body.checks).toEqual({ db: "ok", serviceDb: "ok" });
+    expect(ready.body.checks.db).toBe("ok");
+    expect(ready.body.checks.serviceDb).toBe("ok");
+    expect(["ok", "absent", "stale"]).toContain(ready.body.checks.worker);
   });
 
   it("never leaks a tenant scope to the next user of a pooled connection", async () => {

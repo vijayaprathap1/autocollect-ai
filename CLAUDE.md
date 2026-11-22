@@ -56,10 +56,7 @@ Routes are authenticated by default. Opt out via route `config`: `public: true` 
 ### Dunning engine and jobs
 `modules/workflows/engine.ts` is the core reminder sender, using a crash-safe CLAIM → SEND → RECORD model: a short transaction deducts a credit and reserves `(tenant, invoice, step)` in `messages` with a lease (unique index makes workers mutually exclusive); the provider call happens with no transaction held; a second transaction marks sent/advances or refunds and schedules a retry. Send-time math (timezone, send hour, weekends, DST, catch-up for long-overdue imports) is in `lib/schedule.ts` (pure, unit-tested).
 
-Periodic jobs (dunning, QBO sync, Stripe backfill resume, housekeeping) run two ways:
-- Long-lived hosts: in-process `modules/workflows/scheduler.ts` (disable with `RUN_SCHEDULER=false`).
-- Serverless (Vercel): `GET/POST /cron/dunning` and `/cron/housekeeping`, authenticated by `CRON_SECRET`, triggered by Vercel Cron and `.github/workflows/cron.yml` every 5 min.
-Both paths take database leases (`lib/job-lock.ts`), so duplicate/overlapping triggers and multiple replicas are safe.
+Periodic jobs (dunning, QBO sync, Stripe backfill resume, housekeeping) are rows in `job_queue`. `src/worker.ts` (and the API process when `RUN_SCHEDULER` is true) claims them with `FOR UPDATE SKIP LOCKED` and a lease. Serverless hosts call `GET/POST /cron/dunning`, which enqueues the same jobs and runs them inline. The dunning engine's own lease still prevents a double credit charge. GitHub Actions is not on the schedule.
 
 ### External services and dev mocks
 Stripe (Connect + Billing), Postmark/SMTP email, Twilio SMS, QuickBooks, Anthropic (reply classification, `lib/ai.ts`), Google OAuth. Every one falls back to a local mock when its keys are empty; in dev, emails (verification, invites, reminders) are printed to the API console. `config.ts` distinguishes dev-like (`development`/`test`: mocks, simulators allowed) from production, and `validateProductionConfig()` refuses to start with missing/unsafe config.

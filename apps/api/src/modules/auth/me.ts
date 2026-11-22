@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { servicePool } from "../../lib/db.js";
 import { PLANS, normalizePlan } from "../../lib/billing.js";
 import { stripeEnabled } from "../../lib/stripe.js";
+import { twoFactorEnabled } from "../../lib/two-factor.js";
 
 /**
  * GET /me — the current user, their active workspace and its settings.
@@ -23,6 +24,7 @@ export async function meRoutes(app: FastifyInstance) {
       isSuperAdmin: req.user.isSuperAdmin,
       sessionType: req.user.sessionType,
       organizationCount: orgCount.rows[0]?.n ?? 0,
+      twoFactorEnabled: await twoFactorEnabled(req.user.userId),
     };
 
     if (!req.user.tenantId) {

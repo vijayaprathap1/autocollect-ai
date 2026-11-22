@@ -34,6 +34,8 @@ import { cronRoutes } from "./modules/cron/cron.controller.js";
 import { demoRoutes } from "./modules/demo/demo.controller.js";
 import { adminRoutes } from "./modules/admin/admin.controller.js";
 import { postmarkRoutes } from "./modules/email/postmark.controller.js";
+import { twoFactorRoutes } from "./modules/auth/two-factor.controller.js";
+import { captureException, increment } from "./lib/observability.js";
 
 /** Origins allowed to make state-changing browser requests (CSRF defence). */
 export function allowedOrigins(): Set<string> {
@@ -106,6 +108,7 @@ export function buildApp() {
   const app = Fastify({
     logger: {
       level: config.logLevel,
+      base: { service: "autocollect-api", version: config.version },
       redact: {
         paths: [
           "req.headers.authorization",
@@ -173,10 +176,15 @@ export function buildApp() {
     const user = (req as { user?: { tenantId?: string; userId?: string } | null }).user;
     const level = reply.statusCode >= 500 ? "error" : reply.statusCode >= 400 ? "warn" : "info";
     if (req.url.endsWith("/health") && reply.statusCode === 200) return;
+    const route = req.url.split("?")[0];
+    increment("autocollect_http_requests_total", 1, {
+      method: req.method,
+      status: String(reply.statusCode),
+    });
     req.log[level](
       {
         method: req.method,
-        url: req.url.split("?")[0],
+        url: route,
         statusCode: reply.statusCode,
         durationMs: Math.round(reply.elapsedTime),
         tenantId: user?.tenantId || null,
@@ -224,23 +232,12 @@ export function buildApp() {
     }
     const user = (req as { user?: { tenantId?: string } | null }).user;
     req.log.error({ err, tenantId: user?.tenantId ?? null, method: req.method, url: req.url }, "unhandled error");
-    if (config.errorWebhookUrl && isProduction) {
-      void fetch(config.errorWebhookUrl, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          service: "autocollect-api",
-          version: config.version,
-          level: "error",
-          message: (err as Error).message?.slice(0, 500),
-          requestId: req.id,
-          tenantId: user?.tenantId ?? null,
-          url: req.url.split("?")[0],
-          at: new Date().toISOString(),
-        }),
-        signal: AbortSignal.timeout(3000),
-      }).catch(() => {});
-    }
+    void captureException(err, {
+      requestId: req.id,
+      tenantId: user?.tenantId ?? null,
+      method: req.method,
+      url: req.url.split("?")[0],
+    });
     return reply.status(500).send({
       error: { code: "INTERNAL", message: "Something went wrong on our side. Please retry.", requestId: req.id },
     });
@@ -253,6 +250,7 @@ export function buildApp() {
       void api.register(tenantPlugin);
       void api.register(healthRoutes);
       void api.register(authRoutes);
+      void api.register(twoFactorRoutes);
       void api.register(meRoutes);
       void api.register(stripeRoutes);
       void api.register(csvRoutes);

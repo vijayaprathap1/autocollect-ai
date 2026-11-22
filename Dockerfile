@@ -1,8 +1,10 @@
 # syntax=docker/dockerfile:1.7
 #
 # Single production image: the Fastify API serves the compiled SPA and mounts
-# itself under /api. Runs the in-process scheduler (dunning, QuickBooks sync,
-# Stripe import, housekeeping) — safe with several replicas thanks to DB leases.
+# itself under /api. Runs the Postgres job worker in-process (dunning, QuickBooks
+# sync, Stripe import, housekeeping). A separate worker is the same image:
+#   docker run --env-file .env.production -e RUN_SCHEDULER=false autocollect-ai node dist/worker.js
+# Leases make several replicas safe.
 #
 #   docker build -t autocollect-ai .
 #   docker run --env-file .env.production -p 4000:4000 autocollect-ai

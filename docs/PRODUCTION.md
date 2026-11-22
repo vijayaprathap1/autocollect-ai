@@ -120,12 +120,13 @@ Steps:
    Vercel sets `NODE_ENV=production` itself. Each function instance keeps a small pool
    (`DB_POOL_MAX` 3 + `DB_SERVICE_POOL_MAX` 2 by default on Vercel).
 4. **Deploy** — `vercel deploy --prod`, then `BASE=https://<domain> npm run smoke`.
-5. **Scheduler** — reminders only go out when something calls `/api/cron/dunning`:
-   - **Pro plan:** change the `crons` schedule in `vercel.json` to `*/5 * * * *`.
-   - **Hobby plan** (cron jobs limited to once a day): keep the daily crons as a safety net and let
-     `.github/workflows/cron.yml` trigger every 5 minutes. Set the repository secrets
-     `CRON_URL=https://<domain>/api/cron/dunning` and `CRON_SECRET`. Vercel Hobby is for
-     non-commercial use; a product that bills customers needs Pro.
+5. **Scheduler** — long-lived hosts run the Postgres job worker in the API process
+   (`RUN_SCHEDULER=true`) or as `node dist/worker.js`. Jobs are leased (`SKIP LOCKED`),
+   so a crash retries without double-charging a reminder credit. On Vercel, nothing
+   stays resident: keep the daily crons in `vercel.json` as a safety net and, on Pro,
+   change `/api/cron/dunning` to `*/5 * * * *`. That endpoint enqueues the same jobs
+   and runs them before the function returns. The GitHub Actions schedule is not
+   required; `.github/workflows/cron.yml` is a manual backup only.
 
 Limits to know: 60 s per invocation (dunning is time-budgeted and resumes on the next trigger). Rate limits
 are counted per function instance unless `REDIS_URL` is set — create a free Upstash Redis database (Vercel

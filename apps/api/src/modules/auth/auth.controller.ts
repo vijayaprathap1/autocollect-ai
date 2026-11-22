@@ -35,6 +35,7 @@ import { googleEnabled } from "../../lib/oauth.js";
 import { isValidTimeZone } from "../../lib/schedule.js";
 import { googleAuthRoutes } from "./google.controller.js";
 import { stripeLoginEnabled, stripeLoginRoutes } from "./stripe-login.controller.js";
+import { createTwoFactorChallenge } from "../../lib/two-factor.js";
 
 import { issueVerificationToken, sendAccountEmail } from "../../lib/account-emails.js";
 
@@ -238,6 +239,11 @@ export async function authRoutes(app: FastifyInstance) {
       );
       if (suspended.rows.length) throw new ApiError(403, "TENANT_SUSPENDED", "This workspace has been suspended. Contact support.");
     }
+    const challenge = await createTwoFactorChallenge(servicePool, user.id, {
+      tenantId: membership?.tenantId ?? null,
+      rememberMe: rememberMe !== false,
+    });
+    if (challenge) return { ok: true, twoFactorRequired: true, challengeToken: challenge };
     await recordLoginSuccess(user.id);
     await startSession(req, reply, user.id, { tenantId: membership?.tenantId ?? null, persistent: rememberMe !== false });
 
@@ -260,6 +266,8 @@ export async function authRoutes(app: FastifyInstance) {
     if (!user.is_super_admin || user.status !== "active") {
       throw unauthorized("Incorrect email or password", "INVALID_CREDENTIALS");
     }
+    const challenge = await createTwoFactorChallenge(servicePool, user.id, { sessionType: "admin", rememberMe: false });
+    if (challenge) return { ok: true, twoFactorRequired: true, challengeToken: challenge };
     await recordLoginSuccess(user.id);
     await startSession(req, reply, user.id, { sessionType: "admin", persistent: false });
     return { ok: true, userId: user.id, email: user.email, isSuperAdmin: true, sessionType: "admin" };

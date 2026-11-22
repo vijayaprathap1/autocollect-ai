@@ -17,8 +17,11 @@
     "test:e2e": "playwright test",
     "smoke": "bash scripts/e2e-flow.sh",
     "db:migrate": "npm run db:migrate -w @autocollect/api",
+    "db:migrate:down": "npm run db:migrate:down -w @autocollect/api",
+    "db:rotate-keys": "npm run db:rotate-keys -w @autocollect/api",
     "db:roles": "npm run db:roles -w @autocollect/api",
-    "db:seed": "npm run db:seed -w @autocollect/api"
+    "db:seed": "npm run db:seed -w @autocollect/api",
+    "worker": "npm run worker -w @autocollect/api"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

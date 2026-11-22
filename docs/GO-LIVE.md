@@ -271,19 +271,26 @@ account must be **activated** (business details + bank account) first.
 
 ## Phase 8 — Scheduler (sends reminders)
 
-Reminders are only sent when something calls `/api/cron/dunning`. Pick **one**:
+Reminders are sent by the Postgres job worker. On Docker / a VM the API process runs it
+(`RUN_SCHEDULER=true`), or you run `node dist/worker.js` beside web replicas that set
+`RUN_SCHEDULER=false`. On Vercel nothing stays resident, so something must call
+`/api/cron/dunning`, which enqueues the same jobs and runs them before the function returns.
 
-**Option A — Vercel Cron (Pro plan, simplest)**
-- [ ] 8.1 Ask Claude to change the `crons` schedule for `/api/cron/dunning` in `vercel.json`
-  from `0 6 * * *` to `*/5 * * * *`, merge, and deploy. Vercel automatically sends
-  `CRON_SECRET` with each call.
+**Option A — long-lived host (preferred)**
+- [ ] 8.1 Confirm the container command is `node dist/server.js` with `RUN_SCHEDULER=true`,
+  or add a second process: `node dist/worker.js`.
+- [ ] 8.2 `GET /api/ready` includes `checks.worker` of `ok` within a minute of start.
 
-**Option B — GitHub Actions (already in the repo)**
-- [ ] 8.1 GitHub → repo → **Settings → Secrets and variables → Actions → New repository secret**:
+**Option B — Vercel Cron (Pro plan)**
+- [ ] 8.1 Change the `crons` schedule for `/api/cron/dunning` in `vercel.json`
+  from `0 6 * * *` to `*/5 * * * *`, merge, and deploy. Vercel sends `CRON_SECRET`.
+
+**Option C — manual backup**
+- [ ] 8.1 GitHub → repo → **Settings → Secrets → Actions**:
   - `CRON_URL` = `https://app.yourdomain.com/api/cron/dunning`
   - `CRON_SECRET` = value from 2.3
-- [ ] 8.2 **Actions → Scheduled jobs → Run workflow** once; it should finish green.
-  (GitHub can delay scheduled runs under load and pauses them after 60 days without commits.)
+- [ ] 8.2 **Actions → Scheduled jobs → Run workflow**. The workflow is manual only;
+  it is not on a 5-minute schedule.
 
 - [ ] 8.3 Check it's alive: after 10 minutes, Vercel → project → **Logs**, filter
   `/api/cron/dunning` → entries with status 200.

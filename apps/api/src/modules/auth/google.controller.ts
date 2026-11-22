@@ -12,6 +12,7 @@ import {
   setCookie,
 } from "../../lib/auth.js";
 import { googleEnabled, googleExchangeCode, googleGetUserInfo, googleAuthorizeUrl } from "../../lib/oauth.js";
+import { createTwoFactorChallenge } from "../../lib/two-factor.js";
 
 const NONCE_COOKIE = "ac_google_nonce";
 const STATE_TTL_MS = 15 * 60 * 1000;
@@ -129,15 +130,19 @@ export async function googleAuthRoutes(app: FastifyInstance) {
           membership = { tenantId: org.tenantId, role: org.role, tenantSlug: org.tenantSlug };
           isNew = true;
         }
-        const token = await createSession(client, userId, {
-          ip: req.ip,
-          userAgent: req.headers["user-agent"],
-          tenantId: membership.tenantId,
-        });
-        return { token, isNew };
+        const challenge = await createTwoFactorChallenge(client, userId, { tenantId: membership.tenantId, rememberMe: true });
+        const token = challenge
+          ? null
+          : await createSession(client, userId, {
+              ip: req.ip,
+              userAgent: req.headers["user-agent"],
+              tenantId: membership.tenantId,
+            });
+        return { token, challenge, isNew };
       });
 
-      setSessionCookie(reply, result.token);
+      if (result.challenge) return reply.redirect(webUrl(`/login?mfa=${encodeURIComponent(result.challenge)}`));
+      setSessionCookie(reply, result.token!);
       return reply.redirect(webUrl(result.isNew ? "/dashboard?welcome=1" : "/dashboard"));
     } catch (err) {
       if (err instanceof OAuthFlowError) return fail(reply, err.code);

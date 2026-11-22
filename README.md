@@ -13,7 +13,7 @@ Tools in this space (Chaser, YayPay, Invoiced) start at roughly $259–$500/mont
 ## What it does
 
 - **Invoice ingestion:** Stripe, QuickBooks Online sync, and CSV import feed one shared ingest pipeline
-- **Dunning workflows:** configurable multi-step reminder sequences with templates, run on a scheduler (cron module)
+- **Dunning workflows:** configurable multi-step reminder sequences with templates, sent by a Postgres-backed worker (`npm run worker`, or inside the API when `RUN_SCHEDULER=true`)
 - **Reply inbox:** inbound customer replies are captured and triaged alongside each invoice
 - **Dashboard:** overdue totals, invoice and customer views, and an activity feed
 - **Teams and roles:** organizations with owner / admin / member roles and email invitations
@@ -76,6 +76,14 @@ Open http://localhost:5175 and sign in as `dev-user@autocollect.local` / `dev-pa
 Every external service falls back to a local mock when its keys are empty, and emails are
 printed to the API console, so every flow works offline.
 
+Reminders are sent by the in-process worker. Run `npm run worker` only when the API was
+started with `RUN_SCHEDULER=false`. Two-factor authentication is opt-in under Settings →
+Your account (authenticator app + recovery codes). `GET /health`, `GET /ready` and
+`GET /metrics` are the liveness, readiness and Prometheus endpoints. Set `SENTRY_DSN`
+to post unhandled errors to Sentry, and `METRICS_TOKEN` to require a bearer token on
+`/metrics`. Key rotation is `CREDENTIALS_ENCRYPTION_KEYS` plus `npm run db:rotate-keys`
+(see `apps/api/.env.example`).
+
 | Command | What it does |
 |---|---|
 | `npm run dev` | API (watch) + web (Vite) |
@@ -83,7 +91,9 @@ printed to the API console, so every flow works offline.
 | `npm test` | API unit + integration tests (needs the database) |
 | `npm run test:e2e` | Builds the app and runs the Playwright browser tests |
 | `npm run build` | Production build (shared → API → web) |
-| `npm run db:migrate` / `db:roles` / `db:seed` | Schema, least-privilege roles, demo data |
+| `npm run db:migrate` / `db:migrate:down` / `db:roles` / `db:seed` | Schema, roll back the latest reversible migration, least-privilege roles, demo data |
+| `npm run worker` | Postgres job worker (also runs inside `npm run dev` unless `RUN_SCHEDULER=false`) |
+| `npm run db:rotate-keys` | Re-encrypt stored tokens with `CREDENTIALS_ENCRYPTION_KEY_VERSION` |
 | `npm run smoke` | Post-deploy smoke test (`BASE=https://… npm run smoke`) |
 
 To run the integration tests with Row-Level Security enforced (as CI does), run
@@ -109,7 +119,7 @@ npm test
 - Late fees and early-payment discounts
 - Xero integration
 - Per-workspace sending domains (DKIM) for better deliverability
-- Optional TOTP two-factor sign-in for workspace owners
+- Cash application beyond Stripe payment links (payments stay on Stripe)
 
 ## Author
 

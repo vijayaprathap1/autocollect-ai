@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { ApiClientError, login, resendVerification } from "@/lib/api";
+import { ApiClientError, login, resendVerification, verifyTwoFactor } from "@/lib/api";
 import { Button } from "@/components/ui";
 import { Alert, AuthLayout, Field, PasswordField, SocialSignIn, oauthErrorMessage } from "@/components/auth";
 
@@ -16,6 +16,13 @@ export function Login() {
   const [needsVerification, setNeedsVerification] = useState(false);
   const [notice, setNotice] = useState<string | null>(params.get("reset") === "1" ? "Password updated — sign in with your new password." : null);
   const [loading, setLoading] = useState(false);
+  const [challenge, setChallenge] = useState(params.get("mfa") ?? "");
+  const [code, setCode] = useState("");
+
+  function goNext() {
+    const next = params.get("next");
+    navigate(next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard", { replace: true });
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -24,10 +31,20 @@ export function Login() {
     setNeedsVerification(false);
     setLoading(true);
     try {
-      await login(email.trim(), password, rememberMe);
+      if (challenge) {
+        await verifyTwoFactor(challenge, code);
+        await queryClient.invalidateQueries({ queryKey: ["me"] });
+        goNext();
+        return;
+      }
+      const result = await login(email.trim(), password, rememberMe);
+      if (result.twoFactorRequired && result.challengeToken) {
+        setChallenge(result.challengeToken);
+        setCode("");
+        return;
+      }
       await queryClient.invalidateQueries({ queryKey: ["me"] });
-      const next = params.get("next");
-      navigate(next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard", { replace: true });
+      goNext();
     } catch (err) {
       const e = err as ApiClientError;
       if (e.code === "EMAIL_NOT_VERIFIED") setNeedsVerification(true);
@@ -55,7 +72,7 @@ export function Login() {
 
   return (
     <AuthLayout
-      title="Sign in to your workspace"
+      title={challenge ? "Two-factor authentication" : "Sign in to your workspace"}
       footer={
         <>
           New to AutoCollect AI?{" "}
@@ -76,6 +93,20 @@ export function Login() {
           </Alert>
         )}
         {notice && <Alert tone="success">{notice}</Alert>}
+        {challenge ? (
+          <Field
+            label="Authentication code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="123456 or a recovery code"
+            autoFocus
+            required
+            hint="From your authenticator app, or one of the recovery codes you saved."
+          />
+        ) : (
+          <>
         <Field
           label="Email"
           type="email"
@@ -96,8 +127,10 @@ export function Login() {
             Forgot password?
           </Link>
         </div>
-        <Button type="submit" className="w-full" disabled={loading || !email || !password}>
-          {loading ? "Signing in…" : "Sign in"}
+          </>
+        )}
+        <Button type="submit" className="w-full" disabled={loading || (challenge ? code.trim().length < 6 : !email || !password)}>
+          {loading ? "Signing in…" : challenge ? "Verify" : "Sign in"}
         </Button>
       </form>
       <SocialSignIn />

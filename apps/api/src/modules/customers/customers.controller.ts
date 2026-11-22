@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { likeContains } from "../../lib/like.js";
 
 type CustomerRow = {
   id: string;
@@ -30,11 +31,11 @@ export async function customerRoutes(app: FastifyInstance) {
          FROM customers c
          LEFT JOIN invoices i ON i.customer_id = c.id
         WHERE c.tenant_id = $1
-          AND ($2::text IS NULL OR c.name ILIKE '%' || $2 || '%' OR c.email ILIKE '%' || $2 || '%')
+          AND ($2::text IS NULL OR c.name ILIKE $2 ESCAPE '\\' OR c.email ILIKE $2 ESCAPE '\\')
         GROUP BY c.id
         ORDER BY open_total DESC, c.created_at DESC, c.id
         LIMIT ($3 + 1) OFFSET $4`,
-      [req.user.tenantId, q.q ?? null, limit, offset],
+      [req.user.tenantId, likeContains(q.q), limit, offset],
     );
 
     return {

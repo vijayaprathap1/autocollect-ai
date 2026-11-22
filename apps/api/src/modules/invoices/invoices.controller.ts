@@ -5,6 +5,7 @@ import { notFound, badRequest, conflict, assertUuid } from "../../lib/errors.js"
 import { stripe, stripeEnabled } from "../../lib/stripe.js";
 import { isDevLike } from "../../config.js";
 import { sendNowForInvoice } from "../workflows/engine.js";
+import { likeContains } from "../../lib/like.js";
 
 type InvoiceRow = {
   id: string;
@@ -83,10 +84,10 @@ export async function invoicesRoutes(app: FastifyInstance) {
         WHERE i.tenant_id = $6
           AND ($1::text IS NULL OR ($1 = 'overdue' AND i.status = 'open' AND i.due_date < CURRENT_DATE) OR i.status = $1)
           AND ($2::text IS NULL OR i.source = $2)
-          AND ($3::text IS NULL OR c.name ILIKE '%' || $3 || '%' OR c.email ILIKE '%' || $3 || '%' OR i.external_id ILIKE '%' || $3 || '%')
+          AND ($3::text IS NULL OR c.name ILIKE $3 ESCAPE '\\' OR c.email ILIKE $3 ESCAPE '\\' OR i.external_id ILIKE $3 ESCAPE '\\')
         ORDER BY i.due_date NULLS LAST, i.created_at DESC, i.id
         LIMIT ($4 + 1) OFFSET $5`,
-      [q.status ?? null, q.source ?? null, q.q ? q.q.replace(/[%_\\]/g, "\\$&") : null, q.limit, q.offset, req.user.tenantId],
+      [q.status ?? null, q.source ?? null, likeContains(q.q), q.limit, q.offset, req.user.tenantId],
     );
     return { invoices: rows.rows.slice(0, q.limit).map(toInvoice), limit: q.limit, offset: q.offset, hasMore: rows.rows.length > q.limit };
   });
