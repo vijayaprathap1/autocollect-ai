@@ -5,6 +5,7 @@ import { increment } from "./observability.js";
 import { runDunningDetailed } from "../modules/workflows/engine.js";
 import { syncAllQuickBooks } from "../modules/integrations/qbo.sync.service.js";
 import { resumeStripeBackfills } from "../modules/integrations/stripe.controller.js";
+import { reconcilePromises, refreshRiskScores } from "./collections.js";
 
 let registered = false;
 
@@ -36,6 +37,14 @@ export function registerPlatformJobs(): void {
   registerJob("housekeeping", async () => {
     await runHousekeeping();
   });
+
+  registerJob("promise-reconcile", async () => {
+    await reconcilePromises();
+  });
+
+  registerJob("risk-refresh", async () => {
+    await refreshRiskScores();
+  });
 }
 
 /** Install the recurring schedules the worker drains. Idempotent. */
@@ -45,10 +54,14 @@ export async function ensurePlatformSchedules(): Promise<void> {
   await ensureSchedule("qbo-sync", Math.max(60, Math.round(config.qboSyncIntervalMs / 1000)));
   await ensureSchedule("stripe-backfill", 120);
   await ensureSchedule("housekeeping", 6 * 3600);
+  await ensureSchedule("promise-reconcile", 15 * 60);
+  await ensureSchedule("risk-refresh", 15 * 60);
 }
 
 /** Used by the HTTP cron endpoint so an external poke goes through the same queue. */
-export async function enqueuePlatformJob(name: "dunning" | "qbo-sync" | "stripe-backfill" | "housekeeping"): Promise<boolean> {
+export async function enqueuePlatformJob(
+  name: "dunning" | "qbo-sync" | "stripe-backfill" | "housekeeping" | "promise-reconcile" | "risk-refresh",
+): Promise<boolean> {
   registerPlatformJobs();
   return enqueueJob(name, {}, { singletonKey: name, maxAttempts: 3 });
 }

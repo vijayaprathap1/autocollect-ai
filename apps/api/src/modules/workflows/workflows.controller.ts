@@ -16,25 +16,88 @@ const stepSchema = z.object({
   templateId: z.string().uuid().nullable(),
 });
 
+const segmentSchema = z.enum(["strategic", "standard", "high_risk", "smb"]).nullable();
+
 const workflowUpdateSchema = z.object({
   enabled: z.boolean().optional(),
   name: z.string().trim().min(1).max(120).optional(),
   steps: z.array(stepSchema).max(20).optional(),
+  segment: segmentSchema.optional(),
+  minRisk: z.number().int().min(0).max(100).nullable().optional(),
+  maxRisk: z.number().int().min(0).max(100).nullable().optional(),
+  priority: z.number().int().min(0).max(100).optional(),
 });
+
+type WorkflowListRow = {
+  id: string;
+  name: string;
+  is_default: boolean;
+  enabled: boolean;
+  steps: WorkflowStep[];
+  created_at: string;
+  segment: string | null;
+  min_risk: number | null;
+  max_risk: number | null;
+  priority: number;
+};
+
+function toWorkflow(r: WorkflowListRow) {
+  return {
+    id: r.id,
+    name: r.name,
+    isDefault: r.is_default,
+    enabled: r.enabled,
+    steps: r.steps,
+    createdAt: r.created_at,
+    segment: r.segment,
+    minRisk: r.min_risk,
+    maxRisk: r.max_risk,
+    priority: r.priority,
+  };
+}
 
 export async function workflowRoutes(app: FastifyInstance) {
   app.get("/workflows", async (req) => {
-    const rows = await req.db.query<{
-      id: string; name: string; is_default: boolean; enabled: boolean; steps: WorkflowStep[]; created_at: string;
-    }>(`SELECT id, name, is_default, enabled, steps, created_at FROM workflows WHERE tenant_id = $1 ORDER BY is_default DESC, created_at`, [
-      req.user.tenantId,
-    ]);
+    const rows = await req.db.query<WorkflowListRow>(
+      `SELECT id, name, is_default, enabled, steps, created_at, segment, min_risk, max_risk, priority
+         FROM workflows WHERE tenant_id = $1 ORDER BY is_default DESC, priority DESC, created_at`,
+      [req.user.tenantId],
+    );
     return {
-      workflows: rows.rows.map((r) => ({
-        id: r.id, name: r.name, isDefault: r.is_default, enabled: r.enabled, steps: r.steps, createdAt: r.created_at,
-      })),
+      workflows: rows.rows.map(toWorkflow),
       smsAvailable: smsEnabled || !isProduction,
     };
+  });
+
+  app.post("/workflows", { preHandler: requireRole("admin") }, async (req, reply) => {
+    const body = z
+      .object({
+        name: z.string().trim().min(1).max(120),
+        segment: segmentSchema.optional(),
+        minRisk: z.number().int().min(0).max(100).nullable().optional(),
+        maxRisk: z.number().int().min(0).max(100).nullable().optional(),
+        priority: z.number().int().min(0).max(100).optional(),
+      })
+      .parse(req.body ?? {});
+    const source = await req.db.query<{ steps: WorkflowStep[] }>(
+      `SELECT steps FROM workflows WHERE tenant_id = $1 AND is_default = TRUE ORDER BY created_at LIMIT 1`,
+      [req.user.tenantId],
+    );
+    const created = await req.db.query<WorkflowListRow>(
+      `INSERT INTO workflows (tenant_id, name, is_default, enabled, steps, segment, min_risk, max_risk, priority)
+       VALUES ($1, $2, FALSE, FALSE, $3::jsonb, $4, $5, $6, $7)
+       RETURNING id, name, is_default, enabled, steps, created_at, segment, min_risk, max_risk, priority`,
+      [
+        req.user.tenantId,
+        body.name,
+        JSON.stringify(source.rows[0]?.steps ?? []),
+        body.segment ?? null,
+        body.minRisk ?? null,
+        body.maxRisk ?? null,
+        body.priority ?? 0,
+      ],
+    );
+    return reply.status(201).send({ workflow: toWorkflow(created.rows[0]) });
   });
 
   app.put("/workflows/:id", { preHandler: requireRole("admin") }, async (req) => {
@@ -53,6 +116,13 @@ export async function workflowRoutes(app: FastifyInstance) {
 
     if (body.enabled !== undefined) sets.push(`enabled = ${add(body.enabled)}`);
     if (body.name !== undefined) sets.push(`name = ${add(body.name)}`);
+    if (body.segment !== undefined) sets.push(`segment = ${add(body.segment)}`);
+    if (body.minRisk !== undefined) sets.push(`min_risk = ${add(body.minRisk)}`);
+    if (body.maxRisk !== undefined) sets.push(`max_risk = ${add(body.maxRisk)}`);
+    if (body.priority !== undefined) sets.push(`priority = ${add(body.priority)}`);
+    if (body.minRisk != null && body.maxRisk != null && body.minRisk > body.maxRisk) {
+      throw badRequest("The risk band's minimum is higher than its maximum", "INVALID_RISK_BAND");
+    }
 
     let steps: WorkflowStep[] | undefined;
     if (body.steps !== undefined) {
@@ -87,7 +157,10 @@ export async function workflowRoutes(app: FastifyInstance) {
         `UPDATE invoices SET next_step_due_at = NULL,
                 next_step_index = LEAST(next_step_index, $3)
           WHERE tenant_id = $1 AND status = 'open' AND next_step_index < 9999
-            AND (workflow_id = $2 OR workflow_id IS NULL)`,
+            AND (
+              workflow_id = $2
+              OR (workflow_id IS NULL AND EXISTS (SELECT 1 FROM workflows w WHERE w.id = $2 AND w.is_default))
+            )`,
         [req.user.tenantId, id, steps ? steps.length : 9998],
       );
     }
@@ -97,12 +170,12 @@ export async function workflowRoutes(app: FastifyInstance) {
       JSON.stringify({ workflow_id: id, enabled: body.enabled, steps: steps?.length, name: body.name }),
     ]);
 
-    const updated = await req.db.query<{ id: string; name: string; is_default: boolean; enabled: boolean; steps: WorkflowStep[] }>(
-      `SELECT id, name, is_default, enabled, steps FROM workflows WHERE id = $1 AND tenant_id = $2`,
+    const updated = await req.db.query<WorkflowListRow>(
+      `SELECT id, name, is_default, enabled, steps, created_at, segment, min_risk, max_risk, priority
+         FROM workflows WHERE id = $1 AND tenant_id = $2`,
       [id, req.user.tenantId],
     );
-    const w = updated.rows[0];
-    return { workflow: { id: w.id, name: w.name, isDefault: w.is_default, enabled: w.enabled, steps: w.steps } };
+    return { workflow: toWorkflow(updated.rows[0]) };
   });
 
   app.get("/templates", async (req) => {

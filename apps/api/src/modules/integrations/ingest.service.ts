@@ -1,5 +1,6 @@
 import { servicePool, withServiceTenant } from "../../lib/db.js";
 import { assertInvoiceCapacity } from "../../lib/billing.js";
+import { reconcilePromises } from "../../lib/collections.js";
 
 /** Minimal shape of a Stripe Invoice object (see Stripe API docs). */
 export type StripeInvoiceLike = {
@@ -112,6 +113,7 @@ export async function markInvoicePaid(tenantId: string, invoiceExternalId: strin
       WHERE tenant_id = $1 AND source = 'stripe' AND external_id = $2 AND status <> 'paid'`,
     [tenantId, invoiceExternalId],
   );
+  await reconcilePromises().catch(() => {});
 }
 
 /** Mark one of our invoices paid by its internal id (Payment Link payments). */
@@ -124,9 +126,15 @@ export async function markInvoicePaidById(tenantId: string, invoiceId: string): 
   );
   if (res.rowCount) {
     await servicePool.query(
+      `UPDATE invoices SET payment_link_status = CASE WHEN payment_link IS NULL THEN payment_link_status ELSE 'paid' END
+        WHERE tenant_id = $1 AND id::text = $2`,
+      [tenantId, invoiceId],
+    );
+    await servicePool.query(
       `INSERT INTO audit_log (tenant_id, actor, action, detail) VALUES ($1, 'stripe', 'invoice_paid_via_payment_link', $2::jsonb)`,
       [tenantId, JSON.stringify({ invoice_id: invoiceId })],
     );
+    await reconcilePromises().catch(() => {});
   }
 }
 

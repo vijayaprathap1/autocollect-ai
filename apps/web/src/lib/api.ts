@@ -63,6 +63,8 @@ export const api = {
     request<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) }),
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "PUT", body: body === undefined ? undefined : JSON.stringify(body) }),
+  patch: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: "PATCH", body: body === undefined ? undefined : JSON.stringify(body) }),
   del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
 
@@ -251,6 +253,97 @@ export async function getCustomers(params?: { q?: string; limit?: number; offset
   return api.get<{ customers: CustomerDto[]; limit: number; offset: number; hasMore: boolean }>(`/customers${qs(params)}`);
 }
 
+export type WorklistItem = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  company: string | null;
+  segment: string | null;
+  riskScore: number;
+  collectorUserId: string | null;
+  openTotal: number;
+  openCount: number;
+  daysOverdue: number;
+  openDisputes: number;
+  brokenPromises: number;
+  openTasks: number;
+  nextTaskOn: string | null;
+};
+export const getWorklist = () => api.get<{ worklist: WorklistItem[] }>("/worklist");
+
+export type Customer360 = {
+  customer: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    company: string | null;
+    segment: string | null;
+    riskScore: number;
+    collectorUserId: string | null;
+  };
+  contacts: { id: string; name: string | null; email: string | null; phone: string | null; role: string; is_primary: boolean }[];
+  invoices: { id: string; external_id: string | null; amount_due: number; currency: string; status: string; due_date: string | null; payment_link: string | null }[];
+  communications: { id: string; channel: string; status: string; sent_at: string | null; external_id: string | null }[];
+  replies: { id: string; classification: string; content: string; promise_date: string | null; created_at: string }[];
+  disputes: { id: string; reason_code: string; status: string; summary: string | null; opened_at: string }[];
+  promises: { id: string; amount: number; currency: string; promise_date: string; status: string }[];
+  tasks: { id: string; title: string; due_on: string | null; status: string; source: string }[];
+  payments: { id: string; external_id: string | null; amount_due: number; currency: string; status: string }[];
+};
+export const getCustomer = (id: string) => api.get<Customer360>(`/customers/${id}`);
+export const updateCustomer = (id: string, body: { segment?: string | null; collectorUserId?: string | null }) =>
+  api.patch<{ customer: Customer360["customer"] }>(`/customers/${id}`, body);
+export const assignStrategy = (id: string, workflowId: string | null) =>
+  api.post<{ ok: boolean }>(`/customers/${id}/strategy`, { workflowId });
+
+export type DisputeListItem = {
+  id: string;
+  invoice_id: string | null;
+  customer_id: string | null;
+  reason_code: string;
+  status: string;
+  summary: string | null;
+  customer_name: string | null;
+  external_id: string | null;
+  amount_due: number | null;
+  currency: string | null;
+  opened_at: string;
+};
+export const getDisputes = (status?: string) => api.get<{ disputes: DisputeListItem[] }>(`/disputes${qs({ status })}`);
+export const getDispute = (id: string) =>
+  api.get<{ dispute: DisputeListItem & { resolution: string | null }; notes: { id: string; body: string; created_at: string; display_name: string | null; email: string | null }[] }>(
+    `/disputes/${id}`,
+  );
+export const updateDispute = (id: string, body: { status?: string; reasonCode?: string; resolution?: string | null; summary?: string | null }) =>
+  api.patch(`/disputes/${id}`, body);
+export const addDisputeNote = (id: string, body: string) => api.post(`/disputes/${id}/notes`, { body });
+
+export type PromiseListItem = {
+  id: string;
+  invoice_id: string | null;
+  customer_name: string | null;
+  external_id: string | null;
+  amount: number;
+  currency: string;
+  promise_date: string;
+  status: string;
+};
+export const getPromises = (status?: string) => api.get<{ promises: PromiseListItem[] }>(`/promises${qs({ status })}`);
+export const createPromise = (body: { invoiceId: string; promiseDate: string; amount?: number }) =>
+  api.post<{ promise: PromiseListItem }>("/promises", body);
+
+export const getTasks = (params?: { status?: string; mine?: boolean }) =>
+  api.get<{ tasks: { id: string; title: string; due_on: string | null; status: string; customer_name: string | null; customer_id: string | null }[] }>(
+    `/tasks${qs({ status: params?.status, mine: params?.mine ? "1" : undefined })}`,
+  );
+export const createTask = (body: { title: string; dueOn?: string; customerId?: string; ownerUserId?: string }) =>
+  api.post("/tasks", body);
+export const updateTask = (id: string, body: { status?: string; ownerUserId?: string | null; dueOn?: string | null }) =>
+  api.patch(`/tasks/${id}`, body);
+export const createWorkflow = (body: { name: string; segment?: string | null; minRisk?: number | null; maxRisk?: number | null }) =>
+  api.post<{ workflow: WorkflowDto }>("/workflows", body);
+
 export type InvoiceDto = {
   id: string;
   customerId: string | null;
@@ -316,6 +409,10 @@ export type WorkflowDto = {
   enabled: boolean;
   steps: WorkflowStepDto[];
   createdAt: string;
+  segment?: string | null;
+  minRisk?: number | null;
+  maxRisk?: number | null;
+  priority?: number;
 };
 
 export const getWorkflows = () => api.get<{ workflows: WorkflowDto[]; smsAvailable: boolean }>("/workflows");
@@ -362,6 +459,11 @@ export type DashboardSummaryDto = {
   range: DashboardRange;
   currency: DashboardCurrency;
   credits: DashboardCredits;
+  cei?: number | null;
+  cashCollected?: { date: string; amount: number }[];
+  dsoTrend?: { date: string; days: number | null }[];
+  disputeKpis?: { open: number; resolvedInRange: number; avgDaysToResolve: number | null };
+  promiseKpis?: { open: number; kept: number; broken: number; keptRate: number | null };
 };
 
 export const getDashboard = (range: DashboardRangeKey = "30d") => api.get<DashboardSummaryDto>(`/dashboard?range=${range}`);

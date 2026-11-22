@@ -26,6 +26,11 @@ const Dashboard = lazy(() => import("./pages/Dashboard").then((m) => ({ default:
 const Invoices = lazy(() => import("./pages/Invoices").then((m) => ({ default: m.Invoices })));
 const InvoiceDetail = lazy(() => import("./pages/InvoiceDetail").then((m) => ({ default: m.InvoiceDetail })));
 const Customers = lazy(() => import("./pages/Customers").then((m) => ({ default: m.Customers })));
+const CustomerDetail = lazy(() => import("./pages/CustomerDetail").then((m) => ({ default: m.CustomerDetail })));
+const Worklist = lazy(() => import("./pages/Worklist").then((m) => ({ default: m.Worklist })));
+const Disputes = lazy(() => import("./pages/Disputes").then((m) => ({ default: m.Disputes })));
+const DisputeDetail = lazy(() => import("./pages/DisputeDetail").then((m) => ({ default: m.DisputeDetail })));
+const Promises = lazy(() => import("./pages/Promises").then((m) => ({ default: m.Promises })));
 const Workflows = lazy(() => import("./pages/Workflows").then((m) => ({ default: m.Workflows })));
 const Templates = lazy(() => import("./pages/Templates").then((m) => ({ default: m.Templates })));
 const Activity = lazy(() => import("./pages/Activity").then((m) => ({ default: m.Activity })));
@@ -94,7 +99,12 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/dashboard" element={<Page><Dashboard /></Page>} />
               <Route path="/invoices" element={<Page><Invoices /></Page>} />
               <Route path="/invoices/:id" element={<Page><InvoiceDetail /></Page>} />
+              <Route path="/worklist" element={<Page><Worklist /></Page>} />
               <Route path="/customers" element={<Page><Customers /></Page>} />
+              <Route path="/customers/:id" element={<Page><CustomerDetail /></Page>} />
+              <Route path="/disputes" element={<Page><Disputes /></Page>} />
+              <Route path="/disputes/:id" element={<Page><DisputeDetail /></Page>} />
+              <Route path="/promises" element={<Page><Promises /></Page>} />
               <Route path="/workflows" element={<Page><Workflows /></Page>} />
               <Route path="/templates" element={<Page><Templates /></Page>} />
               <Route path="/activity" element={<Page><Activity /></Page>} />

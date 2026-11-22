@@ -30,6 +30,7 @@ import { membersRoutes } from "./modules/members/members.controller.js";
 import { settingsRoutes } from "./modules/settings/settings.controller.js";
 import { privacyRoutes } from "./modules/privacy/privacy.controller.js";
 import { customerRoutes } from "./modules/customers/customers.controller.js";
+import { collectionRoutes } from "./modules/collections/collections.controller.js";
 import { cronRoutes } from "./modules/cron/cron.controller.js";
 import { demoRoutes } from "./modules/demo/demo.controller.js";
 import { adminRoutes } from "./modules/admin/admin.controller.js";
@@ -267,6 +268,7 @@ export function buildApp() {
       void api.register(settingsRoutes);
       void api.register(privacyRoutes);
       void api.register(customerRoutes);
+      void api.register(collectionRoutes);
       void api.register(cronRoutes);
       void api.register(demoRoutes);
       void api.register(adminRoutes);

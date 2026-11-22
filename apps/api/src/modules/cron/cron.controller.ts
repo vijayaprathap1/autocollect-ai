@@ -39,7 +39,9 @@ export async function cronRoutes(app: FastifyInstance) {
       await enqueuePlatformJob("qbo-sync");
       await enqueuePlatformJob("stripe-backfill");
       if (minute < 5) await enqueuePlatformJob("housekeeping");
-      const jobs = await processJobs({ limit: 6 });
+      await enqueuePlatformJob("promise-reconcile");
+      await enqueuePlatformJob("risk-refresh");
+      const jobs = await processJobs({ limit: 8 });
       return { ok: true, jobs };
     },
   });

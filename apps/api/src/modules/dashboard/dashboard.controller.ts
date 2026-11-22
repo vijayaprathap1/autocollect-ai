@@ -71,6 +71,70 @@ export async function dashboardRoutes(app: FastifyInstance) {
     );
     const k = kpis.rows[0];
 
+    const days = rangeDays[range];
+    const ceiRow = await req.db.query<{ beginning: number; credit_sales: number; ending_total: number; ending_current: number }>(
+        `WITH sales AS (
+           SELECT COALESCE(SUM(amount_due), 0)::bigint AS credit_sales
+             FROM invoices
+            WHERE tenant_id = $1 AND status <> 'void'
+              AND COALESCE(issue_date, created_at::date) >= CURRENT_DATE - $2::int
+         ),
+         collected AS (
+           SELECT COALESCE(SUM(amount_due), 0)::bigint AS collected
+             FROM invoices
+            WHERE tenant_id = $1 AND status = 'paid' AND updated_at::date >= CURRENT_DATE - $2::int
+         ),
+         ending AS (
+           SELECT COALESCE(SUM(amount_due) FILTER (WHERE status = 'open'), 0)::bigint AS ending_total,
+                  COALESCE(SUM(amount_due) FILTER (WHERE status = 'open' AND (due_date IS NULL OR due_date >= CURRENT_DATE)), 0)::bigint AS ending_current
+             FROM invoices WHERE tenant_id = $1
+         )
+         SELECT GREATEST(ending.ending_total + collected.collected - sales.credit_sales, 0)::bigint AS beginning,
+                sales.credit_sales, ending.ending_total, ending.ending_current
+           FROM sales, collected, ending`,
+        [tenantId, days],
+      );
+    const cash = await req.db.query<{ date: string; amount: number }>(
+        `SELECT updated_at::date::text AS date, COALESCE(SUM(amount_due), 0)::bigint AS amount
+           FROM invoices
+          WHERE tenant_id = $1 AND status = 'paid' AND updated_at::date >= CURRENT_DATE - $2::int
+          GROUP BY 1 ORDER BY 1`,
+        [tenantId, days],
+      );
+    const dsoTrend = await req.db.query<{ date: string; days: number | null }>(
+        `SELECT date_trunc('week', updated_at)::date::text AS date,
+                AVG(updated_at::date - issue_date) FILTER (WHERE issue_date IS NOT NULL)::int AS days
+           FROM invoices
+          WHERE tenant_id = $1 AND status = 'paid' AND updated_at::date >= CURRENT_DATE - $2::int
+          GROUP BY 1 ORDER BY 1`,
+        [tenantId, days],
+      );
+    const disputeKpis = await req.db.query<{ open: number; resolved: number; avg_days: number | null }>(
+        `SELECT count(*) FILTER (WHERE status IN ('open', 'investigating', 'pending_customer'))::int AS open,
+                count(*) FILTER (WHERE resolved_at::date >= CURRENT_DATE - $2::int)::int AS resolved,
+                AVG(EXTRACT(EPOCH FROM (resolved_at - opened_at)) / 86400) FILTER (WHERE resolved_at IS NOT NULL AND resolved_at::date >= CURRENT_DATE - $2::int)::int AS avg_days
+           FROM disputes WHERE tenant_id = $1`,
+        [tenantId, days],
+      );
+    const promiseKpis = await req.db.query<{ open: number; kept: number; broken: number }>(
+        `SELECT count(*) FILTER (WHERE status = 'open')::int AS open,
+                count(*) FILTER (WHERE status = 'kept' AND kept_at::date >= CURRENT_DATE - $2::int)::int AS kept,
+                count(*) FILTER (WHERE status = 'broken' AND broken_at::date >= CURRENT_DATE - $2::int)::int AS broken
+           FROM promises WHERE tenant_id = $1`,
+        [tenantId, days],
+      );
+    const ceiSrc = ceiRow.rows[0];
+    const beginning = Number(ceiSrc?.beginning ?? 0);
+    const creditSales = Number(ceiSrc?.credit_sales ?? 0);
+    const endingTotal = Number(ceiSrc?.ending_total ?? 0);
+    const endingCurrent = Number(ceiSrc?.ending_current ?? 0);
+    const ceiDenom = beginning + creditSales - endingCurrent;
+    const cei = ceiDenom > 0 ? Math.round(((beginning + creditSales - endingTotal) / ceiDenom) * 1000) / 10 : null;
+    const disputes = disputeKpis.rows[0];
+    const promises = promiseKpis.rows[0];
+    const kept = promises?.kept ?? 0;
+    const broken = promises?.broken ?? 0;
+
     const aging = await req.db.query<{ bucket: string; count: number; amount: number }>(
       `SELECT CASE
                 WHEN (CURRENT_DATE - due_date) <= 30 THEN '0-30'
@@ -112,6 +176,16 @@ export async function dashboardRoutes(app: FastifyInstance) {
         periodStart: isoTimestamp(m.period_start),
         periodEnd: isoTimestamp(m.period_end),
         subscriptionStatus: m.subscription_status,
+      },
+      cei,
+      cashCollected: cash.rows.map((r) => ({ date: r.date, amount: Number(r.amount) })),
+      dsoTrend: dsoTrend.rows.map((r) => ({ date: r.date, days: r.days })),
+      disputeKpis: { open: disputes?.open ?? 0, resolvedInRange: disputes?.resolved ?? 0, avgDaysToResolve: disputes?.avg_days ?? null },
+      promiseKpis: {
+        open: promises?.open ?? 0,
+        kept,
+        broken,
+        keptRate: kept + broken > 0 ? Math.round((kept / (kept + broken)) * 1000) / 10 : null,
       },
     };
   });

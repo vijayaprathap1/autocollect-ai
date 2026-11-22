@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Button, Card, PageHeader, Spinner } from "@/components/ui";
 import { Alert } from "@/components/auth";
 import { useToast } from "@/components/Toast";
-import { getTemplates, getWorkflows, updateWorkflow, type TemplateDto, type WorkflowDto, type WorkflowStepDto } from "@/lib/api";
+import { createWorkflow, getTemplates, getWorkflows, updateWorkflow, type TemplateDto, type WorkflowDto, type WorkflowStepDto } from "@/lib/api";
 import { useMe } from "@/lib/me";
 
 function stepLabel(delayDays: number): string {
@@ -134,7 +134,10 @@ function WorkflowCard({ workflow, templates, smsAvailable, canEdit, gated }: { w
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold">{workflow.name}</h2>
+            <h2 className="text-lg font-semibold">
+              {workflow.name}
+              {workflow.segment ? <span className="ml-2 text-sm font-normal text-muted">{workflow.segment}{workflow.minRisk != null ? ` · risk ${workflow.minRisk}+` : ""}</span> : null}
+            </h2>
             {workflow.isDefault && <Badge tone="delivered">default</Badge>}
             <Badge tone={workflow.enabled ? "paid" : "paused"}>{workflow.enabled ? "active" : "paused"}</Badge>
           </div>
@@ -170,6 +173,46 @@ function WorkflowCard({ workflow, templates, smsAvailable, canEdit, gated }: { w
           })}
         </ol>
       )}
+    </Card>
+  );
+}
+
+function NewStrategy() {
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
+  const [name, setName] = useState("");
+  const [segment, setSegment] = useState("high_risk");
+  const [minRisk, setMinRisk] = useState("60");
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    try {
+      await createWorkflow({ name: name.trim(), segment, minRisk: minRisk ? Number(minRisk) : null });
+      setName("");
+      await queryClient.invalidateQueries({ queryKey: ["workflows"] });
+      showToast("Strategy created. Turn it on when the steps look right.", "success");
+    } catch (err) {
+      showToast((err as Error).message, "error");
+    }
+  }
+
+  return (
+    <Card className="mt-6 max-w-3xl">
+      <h2 className="mb-1 text-lg font-semibold">New strategy</h2>
+      <p className="mb-3 text-sm text-muted">Copies the default steps. It applies to customers in this segment whose risk score is at least the minimum.</p>
+      <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
+        <label className="text-sm">Name<input className="mt-1 block rounded-md border border-slate-300 px-2 py-2" value={name} onChange={(e) => setName(e.target.value)} required /></label>
+        <label className="text-sm">Segment
+          <select className="mt-1 block rounded-md border border-slate-300 px-2 py-2" value={segment} onChange={(e) => setSegment(e.target.value)}>
+            <option value="strategic">Strategic</option>
+            <option value="standard">Standard</option>
+            <option value="high_risk">High risk</option>
+            <option value="smb">SMB</option>
+          </select>
+        </label>
+        <label className="text-sm">Min risk<input className="mt-1 block w-24 rounded-md border border-slate-300 px-2 py-2" value={minRisk} onChange={(e) => setMinRisk(e.target.value)} inputMode="numeric" /></label>
+        <Button type="submit" disabled={!name.trim()}>Create</Button>
+      </form>
     </Card>
   );
 }
@@ -221,6 +264,7 @@ export function Workflows() {
           <p className="text-sm text-muted">No workflow yet.</p>
         </Card>
       )}
+      {canEdit && <NewStrategy />}
     </div>
   );
 }

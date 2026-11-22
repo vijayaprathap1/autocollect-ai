@@ -252,6 +252,39 @@ export function Dashboard() {
           </Card>
         </div>
 
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <div className="text-sm font-medium text-muted">Collection effectiveness</div>
+            <div className="mt-1 text-2xl font-bold">{data.cei == null ? "—" : `${data.cei}%`}</div>
+            <div className="mt-1 text-xs text-muted">Collected versus what was collectible in this range</div>
+          </Card>
+          <Card>
+            <div className="text-sm font-medium text-muted">Open disputes</div>
+            <div className="mt-1 text-2xl font-bold">{data.disputeKpis?.open ?? 0}</div>
+            <div className="mt-1 text-xs text-muted">
+              {data.disputeKpis?.resolvedInRange ?? 0} resolved · avg {data.disputeKpis?.avgDaysToResolve ?? "—"} days
+            </div>
+          </Card>
+          <Card>
+            <div className="text-sm font-medium text-muted">Promises kept</div>
+            <div className="mt-1 text-2xl font-bold">{data.promiseKpis?.keptRate == null ? "—" : `${data.promiseKpis.keptRate}%`}</div>
+            <div className="mt-1 text-xs text-muted">
+              {data.promiseKpis?.kept ?? 0} kept · {data.promiseKpis?.broken ?? 0} broken · {data.promiseKpis?.open ?? 0} open
+            </div>
+          </Card>
+          <Card>
+            <div className="text-sm font-medium text-muted">Cash collected</div>
+            <div className="mt-1 text-2xl font-bold">
+              {formatMoney((data.cashCollected ?? []).reduce((sum, row) => sum + row.amount, 0), currency)}
+            </div>
+            <div className="mt-1 text-xs text-muted">
+              {(data.dsoTrend ?? []).length
+                ? `DSO by week: ${(data.dsoTrend ?? []).map((p) => (p.days == null ? "—" : `${p.days}d`)).join(" · ")}`
+                : "No paid invoices in this range"}
+            </div>
+          </Card>
+        </div>
+
         <div className="mt-8 grid gap-6">
           <Card>
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
