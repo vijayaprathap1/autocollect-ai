@@ -8,6 +8,7 @@ import { generateToken, hashToken, provisionUserAndTenant, emailSchema } from ".
 import { accountSetupEmail } from "../../lib/email-templates.js";
 import { sendEmail } from "../../lib/postmark.js";
 import { isPlanKey, setTenantPlan, PLAN_KEYS } from "../../lib/billing.js";
+import { likeContains } from "../../lib/like.js";
 
 const SETUP_LINK_TTL_MINUTES = 72 * 60;
 
@@ -117,10 +118,10 @@ export async function adminRoutes(app: FastifyInstance) {
               (SELECT u.email FROM memberships m JOIN users u ON u.id = m.user_id
                 WHERE m.tenant_id = t.id AND m.role = 'owner' ORDER BY m.created_at LIMIT 1) AS owner_email
          FROM tenants t
-        WHERE ($1::text IS NULL OR t.name ILIKE '%' || $1 || '%' OR t.slug ILIKE '%' || $1 || '%')
+        WHERE ($1::text IS NULL OR t.name ILIKE $1 ESCAPE '\\' OR t.slug ILIKE $1 ESCAPE '\\')
         ORDER BY t.created_at DESC
         LIMIT $2 OFFSET $3`,
-      [q ?? null, limit + 1, offset],
+      [likeContains(q), limit + 1, offset],
     );
     return {
       tenants: rows.rows.slice(0, limit).map((r) => ({
@@ -153,10 +154,10 @@ export async function adminRoutes(app: FastifyInstance) {
            SELECT t.name, m.role FROM memberships m JOIN tenants t ON t.id = m.tenant_id
             WHERE m.user_id = u.id AND m.status = 'active' ORDER BY m.created_at LIMIT 1
          ) mm ON TRUE
-        WHERE ($1::text IS NULL OR u.email ILIKE '%' || $1 || '%' OR u.display_name ILIKE '%' || $1 || '%')
+        WHERE ($1::text IS NULL OR u.email ILIKE $1 ESCAPE '\\' OR u.display_name ILIKE $1 ESCAPE '\\')
         ORDER BY u.created_at DESC
         LIMIT $2 OFFSET $3`,
-      [q ?? null, limit + 1, offset],
+      [likeContains(q), limit + 1, offset],
     );
     return {
       users: rows.rows.slice(0, limit).map((r) => ({

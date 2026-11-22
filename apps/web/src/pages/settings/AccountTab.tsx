@@ -4,7 +4,18 @@ import { Button, Card, Spinner } from "@/components/ui";
 import { Alert, Field, PasswordField, passwordIssues } from "@/components/auth";
 import { useToast } from "@/components/Toast";
 import { useMe } from "@/lib/me";
-import { changePassword, deleteAccount, getSessions, revokeOtherSessions, revokeSession, updateProfile } from "@/lib/api";
+import {
+  changePassword,
+  deleteAccount,
+  disableTwoFactor,
+  enableTwoFactor,
+  getSessions,
+  regenerateRecoveryCodes,
+  revokeOtherSessions,
+  revokeSession,
+  setupTwoFactor,
+  updateProfile,
+} from "@/lib/api";
 import { describeUserAgent, timeAgo } from "@/lib/format";
 
 function ProfileCard() {
@@ -148,9 +159,128 @@ export function AccountTab() {
     <div className="grid gap-6">
       <ProfileCard />
       <PasswordCard />
+      <TwoFactorCard />
       <SessionsCard />
       <DeleteAccountCard />
     </div>
+  );
+}
+
+function TwoFactorCard() {
+  const me = useMe();
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
+  const [setup, setSetup] = useState<{ secret: string; otpauthUrl: string } | null>(null);
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [recovery, setRecovery] = useState<string[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const enabled = Boolean(me.user.twoFactorEnabled);
+
+  async function start() {
+    setBusy(true);
+    try {
+      setSetup(await setupTwoFactor());
+      setRecovery(null);
+    } catch (err) {
+      showToast((err as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirm(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const result = await enableTwoFactor(code.trim());
+      setRecovery(result.recoveryCodes);
+      setSetup(null);
+      setCode("");
+      await queryClient.invalidateQueries({ queryKey: ["me"] });
+      showToast("Two-factor authentication is on", "success");
+    } catch (err) {
+      showToast((err as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function turnOff(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await disableTwoFactor(password, code.trim());
+      setPassword("");
+      setCode("");
+      setRecovery(null);
+      await queryClient.invalidateQueries({ queryKey: ["me"] });
+      showToast("Two-factor authentication is off", "success");
+    } catch (err) {
+      showToast((err as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rotateCodes() {
+    setBusy(true);
+    try {
+      const result = await regenerateRecoveryCodes(code.trim());
+      setRecovery(result.recoveryCodes);
+      setCode("");
+      showToast("New recovery codes saved on this screen", "success");
+    } catch (err) {
+      showToast((err as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <h2 className="mb-1 text-lg font-semibold">Two-factor authentication</h2>
+      <p className="mb-4 text-sm text-muted">
+        {enabled
+          ? "Sign-in asks for a code from your authenticator app after the password."
+          : "Add an authenticator app so a stolen password is not enough to sign in."}
+      </p>
+      {recovery && (
+        <Alert tone="warning">
+          <span className="mb-2 block font-medium">Save these recovery codes. They are shown once.</span>
+          <span className="grid grid-cols-2 gap-1 font-mono text-xs">{recovery.map((c) => <span key={c}>{c}</span>)}</span>
+        </Alert>
+      )}
+      {!enabled && !setup && (
+        <Button type="button" onClick={start} disabled={busy}>
+          {busy ? "Preparing…" : "Set up authenticator"}
+        </Button>
+      )}
+      {setup && (
+        <form onSubmit={confirm} className="grid max-w-md gap-3">
+          <p className="text-sm">Add this key to your authenticator app, then enter the 6-digit code.</p>
+          <code className="break-all rounded-md bg-slate-100 px-3 py-2 text-sm">{setup.secret}</code>
+          <Field label="Code" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} required />
+          <Button type="submit" disabled={busy || code.trim().length < 6}>
+            {busy ? "Checking…" : "Turn on"}
+          </Button>
+        </form>
+      )}
+      {enabled && (
+        <form onSubmit={turnOff} className="grid max-w-md gap-3">
+          <PasswordField label="Password" value={password} onChange={setPassword} />
+          <Field label="Authenticator or recovery code" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" required />
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" variant="danger" disabled={busy || !password || code.trim().length < 6}>
+              Turn off
+            </Button>
+            <Button type="button" variant="secondary" disabled={busy || code.trim().length < 6} onClick={rotateCodes}>
+              New recovery codes
+            </Button>
+          </div>
+        </form>
+      )}
+    </Card>
   );
 }
 

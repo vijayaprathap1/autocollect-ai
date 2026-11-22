@@ -33,6 +33,14 @@ function envBool(name: string, fallback: boolean): boolean {
   throw new Error(`Invalid ${name}: expected true/false, got "${raw}"`);
 }
 
+function envIntOrNull(name: string): number | null {
+  const raw = env(name);
+  if (!raw) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || !Number.isInteger(n)) throw new Error(`Invalid ${name}: expected an integer, got "${raw}"`);
+  return n;
+}
+
 function envList(name: string): string[] {
   return env(name)
     .split(",")
@@ -92,6 +100,10 @@ export const config = {
 
   // Secrets
   credentialsEncryptionKey: env("CREDENTIALS_ENCRYPTION_KEY"),
+  /** Extra key versions, `2:<32 chars>,3:<32 chars>`. Version 1 is CREDENTIALS_ENCRYPTION_KEY. */
+  credentialsEncryptionKeys: env("CREDENTIALS_ENCRYPTION_KEYS"),
+  /** Version newly written secrets use. Defaults to the highest configured version. */
+  credentialsEncryptionKeyVersion: envIntOrNull("CREDENTIALS_ENCRYPTION_KEY_VERSION"),
   stateSecret: env("OAUTH_STATE_SECRET"),
   inboundWebhookToken: env("POSTMARK_WEBHOOK_TOKEN"),
 
@@ -167,11 +179,41 @@ export const config = {
 
   // Monitoring
   errorWebhookUrl: env("ERROR_WEBHOOK_URL"),
+  /** Sentry DSN. When set, unhandled errors are posted as envelopes. Empty disables it. */
+  sentryDsn: env("SENTRY_DSN"),
+  /** If set, GET /metrics requires `Authorization: Bearer <token>`. */
+  metricsToken: env("METRICS_TOKEN"),
   providerTimeoutMs: envInt("PROVIDER_TIMEOUT_MS", 15_000, { min: 1_000 }),
+  workerPollMs: envInt("WORKER_POLL_MS", 5_000, { min: 1_000, max: 300_000 }),
 
   // Serverless cron trigger secret (see modules/cron)
   cronSecret: env("CRON_SECRET"),
 };
+
+function encryptionConfigProblem(): string {
+  const primary = config.credentialsEncryptionKey;
+  if (primary && primary.length !== 32) return "CREDENTIALS_ENCRYPTION_KEY must be exactly 32 characters";
+  const versions = new Set<number>();
+  if (primary) versions.add(1);
+  for (const part of config.credentialsEncryptionKeys.split(",").map((s) => s.trim()).filter(Boolean)) {
+    const sep = part.indexOf(":");
+    const version = Number(part.slice(0, sep));
+    const raw = part.slice(sep + 1);
+    if (!Number.isInteger(version) || version < 1 || sep < 1 || raw.length !== 32) {
+      return "CREDENTIALS_ENCRYPTION_KEYS entries must look like 2:<32 characters>";
+    }
+    versions.add(version);
+  }
+  if (versions.size === 0) return "CREDENTIALS_ENCRYPTION_KEY (exactly 32 characters)";
+  if (config.credentialsEncryptionKeyVersion !== null && !versions.has(config.credentialsEncryptionKeyVersion)) {
+    return `CREDENTIALS_ENCRYPTION_KEY_VERSION ${config.credentialsEncryptionKeyVersion} is not in the key ring`;
+  }
+  return "";
+}
+
+function encryptionConfigOk(): boolean {
+  return encryptionConfigProblem() === "";
+}
 
 export function validateProductionConfig(): void {
   if (!isProduction) return;
@@ -183,7 +225,7 @@ export function validateProductionConfig(): void {
 
   need(Boolean(process.env.DATABASE_URL), "DATABASE_URL");
   need(Boolean(config.databaseServiceUrl), "SERVICE_DATABASE_URL (BYPASSRLS service role)");
-  need(config.credentialsEncryptionKey.length === 32, "CREDENTIALS_ENCRYPTION_KEY (exactly 32 characters)");
+  need(encryptionConfigOk(), encryptionConfigProblem());
   need(config.stateSecret.length >= 32, "OAUTH_STATE_SECRET (32+ random characters)");
   need(config.cronSecret.length >= 32, "CRON_SECRET (32+ random characters)");
   need(config.inboundWebhookToken.length >= 24, "POSTMARK_WEBHOOK_TOKEN (24+ random characters)");

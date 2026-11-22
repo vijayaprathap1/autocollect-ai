@@ -12,6 +12,7 @@ import {
   setCookie,
 } from "../../lib/auth.js";
 import { stripe, stripeEnabled } from "../../lib/stripe.js";
+import { createTwoFactorChallenge } from "../../lib/two-factor.js";
 import { issueVerificationToken, sendAccountEmail } from "../../lib/account-emails.js";
 import { emailVerificationEmail } from "../../lib/email-templates.js";
 import {
@@ -129,7 +130,15 @@ export async function stripeLoginRoutes(app: FastifyInstance) {
       return fail(reply, "stripe_failed");
     }
 
-    let result: { token: string; tenantId: string; userId: string; isNew: boolean; connected: boolean; verifyEmail: string | null };
+    let result: {
+      token: string | null;
+      challenge: string | null;
+      tenantId: string;
+      userId: string;
+      isNew: boolean;
+      connected: boolean;
+      verifyEmail: string | null;
+    };
     try {
       result = await withServiceTransaction(async (client) => {
         const acct = profile.credentials.stripe_account_id;
@@ -217,12 +226,15 @@ export async function stripeLoginRoutes(app: FastifyInstance) {
           JSON.stringify({ account: acct, livemode: profile.credentials.livemode ?? false }),
         ]);
 
-        const token = await createSession(client, userId, {
-          ip: req.ip,
-          userAgent: req.headers["user-agent"],
-          tenantId: membership.tenantId,
-        });
-        return { token, tenantId: membership.tenantId, userId, isNew, connected, verifyEmail };
+        const challenge = await createTwoFactorChallenge(client, userId, { tenantId: membership.tenantId, rememberMe: true });
+        const token = challenge
+          ? null
+          : await createSession(client, userId, {
+              ip: req.ip,
+              userAgent: req.headers["user-agent"],
+              tenantId: membership.tenantId,
+            });
+        return { token, challenge, tenantId: membership.tenantId, userId, isNew, connected, verifyEmail };
       });
     } catch (err) {
       if (err instanceof OAuthFlowError) return fail(reply, err.code);
@@ -231,7 +243,8 @@ export async function stripeLoginRoutes(app: FastifyInstance) {
       return fail(reply, "stripe_failed");
     }
 
-    setSessionCookie(reply, result.token);
+    if (result.challenge) return reply.redirect(webUrl(`/login?mfa=${encodeURIComponent(result.challenge)}`));
+    setSessionCookie(reply, result.token!);
 
     if (result.verifyEmail) {
       const token = await issueVerificationToken(result.userId).catch(() => null);

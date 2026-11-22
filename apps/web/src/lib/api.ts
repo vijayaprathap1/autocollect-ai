@@ -87,6 +87,7 @@ export type MeResponse = {
     isSuperAdmin: boolean;
     sessionType?: "tenant" | "admin";
     organizationCount: number;
+    twoFactorEnabled?: boolean;
   };
   tenant: {
     id: string;
@@ -125,9 +126,19 @@ export const startReminders = () =>
   api.post<{ ok: boolean; workflowId: string; steps: number; templatesApproved: number }>("/onboarding/start-reminders", {});
 export const getProviders = () => api.get<Providers>("/auth/providers");
 
+export type LoginResult = { ok: boolean; twoFactorRequired?: boolean; challengeToken?: string };
 export const login = (email: string, password: string, rememberMe: boolean) =>
-  api.post<{ ok: boolean }>("/auth/login", { email, password, rememberMe });
-export const adminLogin = (email: string, password: string) => api.post<{ ok: boolean }>("/auth/admin/login", { email, password });
+  api.post<LoginResult>("/auth/login", { email, password, rememberMe });
+export const verifyTwoFactor = (challengeToken: string, code: string) =>
+  api.post<{ ok: boolean }>("/auth/2fa/verify", { challengeToken, code });
+export const setupTwoFactor = () => api.post<{ secret: string; otpauthUrl: string }>("/auth/2fa/setup", {});
+export const enableTwoFactor = (code: string) =>
+  api.post<{ ok: boolean; recoveryCodes: string[] }>("/auth/2fa/enable", { code });
+export const disableTwoFactor = (password: string, code: string) =>
+  api.post<{ ok: boolean }>("/auth/2fa/disable", { password, code });
+export const regenerateRecoveryCodes = (code: string) =>
+  api.post<{ ok: boolean; recoveryCodes: string[] }>("/auth/2fa/recovery", { code });
+export const adminLogin = (email: string, password: string) => api.post<LoginResult>("/auth/admin/login", { email, password });
 export const signup = (body: { name: string; email: string; password: string; organizationName?: string; timezone?: string }) =>
   api.post<{ ok: boolean; message: string }>("/auth/signup", body);
 export const resendVerification = (email: string) => api.post<{ ok: boolean; message: string }>("/auth/resend-verification", { email });
