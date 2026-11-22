@@ -56,11 +56,11 @@ function StepEditor({
     <div className="space-y-3">
       {error && <Alert>{error}</Alert>}
       {steps.map((step, i) => (
-        <div key={i} className="grid gap-2 rounded-lg border border-slate-200 p-3 text-sm sm:grid-cols-[110px_110px_1fr_auto] sm:items-center">
+        <div key={i} className="grid gap-2 rounded-lg border border-line p-3 text-sm sm:grid-cols-[110px_110px_1fr_auto] sm:items-center">
           <label className="flex items-center gap-2">
             <input
               type="number"
-              className="w-16 rounded-md border border-slate-300 px-2 py-1"
+              className="w-16 rounded-md border border-line px-2 py-1"
               value={step.delayDays}
               min={-60}
               max={365}
@@ -69,11 +69,11 @@ function StepEditor({
             />
             <span className="text-xs text-muted">days</span>
           </label>
-          <select className="rounded-md border border-slate-300 px-2 py-1" value={step.channel} onChange={(e) => update(i, { channel: e.target.value })} aria-label="Channel">
+          <select className="rounded-md border border-line px-2 py-1" value={step.channel} onChange={(e) => update(i, { channel: e.target.value })} aria-label="Channel">
             <option value="email">Email</option>
             {(smsAvailable || step.channel === "sms") && <option value="sms">SMS</option>}
           </select>
-          <select className="min-w-0 rounded-md border border-slate-300 px-2 py-1" value={step.templateId ?? ""} onChange={(e) => update(i, { templateId: e.target.value || null })} aria-label="Template">
+          <select className="min-w-0 rounded-md border border-line px-2 py-1" value={step.templateId ?? ""} onChange={(e) => update(i, { templateId: e.target.value || null })} aria-label="Template">
             <option value="">Choose a template…</option>
             {templates.map((t) => (
               <option key={t.id} value={t.id}>
@@ -162,7 +162,7 @@ function WorkflowCard({ workflow, templates, smsAvailable, canEdit, gated }: { w
           {workflow.steps.map((step, i) => {
             const t = step.templateId ? byId.get(step.templateId) : undefined;
             return (
-              <li key={i} className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm">
+              <li key={i} className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-bg/60 px-3 py-2 text-sm">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{i + 1}</span>
                 <span className="font-medium">{stepLabel(step.delayDays)}</span>
                 <span className="uppercase text-xs text-muted">{step.channel}</span>
@@ -201,16 +201,16 @@ function NewStrategy() {
       <h2 className="mb-1 text-lg font-semibold">New strategy</h2>
       <p className="mb-3 text-sm text-muted">Copies the default steps. It applies to customers in this segment whose risk score is at least the minimum.</p>
       <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
-        <label className="text-sm">Name<input className="mt-1 block rounded-md border border-slate-300 px-2 py-2" value={name} onChange={(e) => setName(e.target.value)} required /></label>
+        <label className="text-sm">Name<input className="mt-1 block rounded-md border border-line px-2 py-2" value={name} onChange={(e) => setName(e.target.value)} required /></label>
         <label className="text-sm">Segment
-          <select className="mt-1 block rounded-md border border-slate-300 px-2 py-2" value={segment} onChange={(e) => setSegment(e.target.value)}>
+          <select className="mt-1 block rounded-md border border-line px-2 py-2" value={segment} onChange={(e) => setSegment(e.target.value)}>
             <option value="strategic">Strategic</option>
             <option value="standard">Standard</option>
             <option value="high_risk">High risk</option>
             <option value="smb">SMB</option>
           </select>
         </label>
-        <label className="text-sm">Min risk<input className="mt-1 block w-24 rounded-md border border-slate-300 px-2 py-2" value={minRisk} onChange={(e) => setMinRisk(e.target.value)} inputMode="numeric" /></label>
+        <label className="text-sm">Min risk<input className="mt-1 block w-24 rounded-md border border-line px-2 py-2" value={minRisk} onChange={(e) => setMinRisk(e.target.value)} inputMode="numeric" /></label>
         <Button type="submit" disabled={!name.trim()}>Create</Button>
       </form>
     </Card>

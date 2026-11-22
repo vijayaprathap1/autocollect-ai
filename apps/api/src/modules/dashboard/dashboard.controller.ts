@@ -64,7 +64,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
          COALESCE(SUM(amount_due) FILTER (WHERE status = 'paid' AND updated_at >= now() - interval '30 days'), 0)::bigint AS recovered30d,
          COUNT(*) FILTER (WHERE status = 'open')::int AS open_count,
          COUNT(*) FILTER (WHERE status = 'paid' AND updated_at >= now() - interval '30 days')::int AS paid_count_30d,
-         AVG(updated_at::date - issue_date) FILTER (WHERE status = 'paid' AND issue_date IS NOT NULL AND updated_at >= now() - ($2::int * interval '1 day'))::int AS avg_dso_days
+         AVG(updated_at::date - issue_date) FILTER (WHERE status = 'paid' AND issue_date IS NOT NULL AND updated_at::date >= issue_date AND updated_at >= now() - ($2::int * interval '1 day'))::int AS avg_dso_days
        FROM invoices
        WHERE tenant_id = $1`,
       [tenantId, rangeDays[range]],
@@ -103,7 +103,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
       );
     const dsoTrend = await req.db.query<{ date: string; days: number | null }>(
         `SELECT date_trunc('week', updated_at)::date::text AS date,
-                AVG(updated_at::date - issue_date) FILTER (WHERE issue_date IS NOT NULL)::int AS days
+                AVG(updated_at::date - issue_date) FILTER (WHERE issue_date IS NOT NULL AND updated_at::date >= issue_date)::int AS days
            FROM invoices
           WHERE tenant_id = $1 AND status = 'paid' AND updated_at::date >= CURRENT_DATE - $2::int
           GROUP BY 1 ORDER BY 1`,

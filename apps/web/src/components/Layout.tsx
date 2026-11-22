@@ -46,12 +46,12 @@ function WorkspaceSwitcher({ onSwitched }: { onSwitched?: () => void }) {
     staleTime: 60_000,
   });
   if (me.user.organizationCount <= 1 || !data) {
-    return <div className="mt-1 truncate pl-8 text-[10px] uppercase tracking-[0.16em] text-slate-400">{me.tenant?.name ?? "Your workspace"}</div>;
+    return <div className="mt-1 truncate text-[11px] tracking-wide text-muted">{me.tenant?.name ?? "Your workspace"}</div>;
   }
   return (
     <select
       aria-label="Switch workspace"
-      className="mt-2 w-full rounded-md border border-white/15 bg-[#102344] px-2 py-1 text-xs text-white"
+      className="mt-2 w-full rounded-lg border border-line bg-surface px-2 py-1 text-xs text-ink"
       value={me.tenant?.id}
       onChange={async (e) => {
         try {
@@ -73,6 +73,25 @@ function WorkspaceSwitcher({ onSwitched }: { onSwitched?: () => void }) {
   );
 }
 
+function ThemeToggle() {
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
+  return (
+    <button
+      type="button"
+      aria-pressed={dark}
+      onClick={() => {
+        const next = !document.documentElement.classList.contains("dark");
+        document.documentElement.classList.toggle("dark", next);
+        localStorage.setItem("ac-theme", next ? "dark" : "light");
+        setDark(next);
+      }}
+      className="rounded-full border border-line px-3 py-1 text-[11px] font-medium text-ink hover:bg-bg"
+    >
+      {dark ? "Light mode" : "Dark mode"}
+    </button>
+  );
+}
+
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const me = useMe();
   const signOut = useSignOut();
@@ -81,18 +100,18 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <>
-      <div className="border-b border-white/10 px-5 py-5">
+      <div className="border-b border-line px-5 py-5">
         {branding.logoUrl ? (
           <img src={branding.logoUrl} alt={appName} className="h-7 w-auto max-w-[180px]" />
         ) : (
           <div className="flex items-center gap-2 text-[15px] font-semibold tracking-tight">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-[#0e4ab8] text-xs font-bold">A</span>
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-xs font-bold text-white">A</span>
             <span className="truncate">{appName}</span>
           </div>
         )}
         <WorkspaceSwitcher onSwitched={onNavigate} />
       </div>
-      <nav className="flex flex-col gap-1 px-3 py-6" aria-label="Primary navigation">
+      <nav className="flex flex-col gap-0.5 px-3 py-4" aria-label="Primary navigation">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
@@ -100,8 +119,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             onClick={onNavigate}
             className={({ isActive }) =>
               cn(
-                "rounded-lg border-l-2 border-transparent px-3 py-2 text-[13px] font-medium transition-colors",
-                isActive ? "border-[#1769e0] bg-[#102344] text-white" : "text-slate-400 hover:bg-white/5 hover:text-white",
+                "rounded-lg px-3 py-2 text-[13px] font-medium transition-colors",
+                isActive ? "bg-primary/10 text-primary" : "text-muted hover:bg-bg hover:text-ink",
               )
             }
           >
@@ -109,17 +128,18 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </NavLink>
         ))}
       </nav>
-      <div className="mt-auto space-y-1 border-t border-white/10 px-5 py-5 text-xs text-slate-400">
-        <div className="truncate font-medium text-slate-200" title={me.user.email}>
+      <div className="mt-auto space-y-2 border-t border-line px-5 py-4 text-xs text-muted">
+        <ThemeToggle />
+        <div className="truncate font-medium text-ink" title={me.user.email}>
           {me.user.displayName || me.user.email}
         </div>
         <div className="truncate">{me.user.displayName ? me.user.email : null}</div>
         <div className="capitalize">{me.user.role}</div>
-        <div className="flex gap-3 pt-2">
-          <NavLink to="/settings?tab=account" onClick={onNavigate} className="hover:text-white hover:underline">
+        <div className="flex gap-3 pt-1">
+          <NavLink to="/settings?tab=account" onClick={onNavigate} className="hover:text-ink hover:underline">
             Account
           </NavLink>
-          <button onClick={signOut} className="cursor-pointer hover:text-white hover:underline">
+          <button onClick={signOut} className="cursor-pointer hover:text-ink hover:underline">
             Sign out
           </button>
         </div>
@@ -159,18 +179,18 @@ export function Layout() {
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2">
         Skip to content
       </a>
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[210px] shrink-0 flex-col bg-[#091525] text-white lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[232px] shrink-0 flex-col border-r border-line bg-surface/80 text-ink backdrop-blur-xl lg:flex">
         <SidebarContent />
       </aside>
 
-      <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-surface px-4 lg:hidden">
+      <header className="flex h-14 items-center justify-between border-b border-line bg-surface/80 px-4 backdrop-blur-xl lg:hidden">
         <div className="truncate text-[15px] font-semibold">{me.tenant?.branding?.appName || "AutoCollect AI"}</div>
         <button
           type="button"
           aria-controls="mobile-navigation"
           aria-expanded={mobileNavOpen}
           onClick={() => setMobileNavOpen((o) => !o)}
-          className="ml-4 rounded-md border border-slate-300 px-3 py-2 text-xs font-semibold text-ink hover:bg-slate-50"
+          className="ml-4 rounded-full border border-line px-3 py-2 text-xs font-semibold text-ink hover:bg-bg"
         >
           {mobileNavOpen ? "Close" : "Menu"}
         </button>
@@ -178,21 +198,21 @@ export function Layout() {
 
       {mobileNavOpen && (
         <>
-          <button type="button" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} className="fixed inset-0 z-30 bg-[#091525]/50 lg:hidden" />
-          <aside id="mobile-navigation" className="fixed inset-y-0 left-0 z-40 flex w-[min(84vw,300px)] flex-col bg-[#091525] text-white shadow-xl lg:hidden">
+          <button type="button" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} className="fixed inset-0 z-30 bg-black/40 lg:hidden" />
+          <aside id="mobile-navigation" className="fixed inset-y-0 left-0 z-40 flex w-[min(84vw,300px)] flex-col border-r border-line bg-surface text-ink shadow-card lg:hidden">
             <SidebarContent onNavigate={() => setMobileNavOpen(false)} />
           </aside>
         </>
       )}
 
-      <main id="main" className="min-h-screen lg:ml-[210px]">
+      <main id="main" className="min-h-screen lg:ml-[232px]">
         {needsSetup && isAdmin && (
-          <div className="flex min-h-[38px] flex-wrap items-center gap-x-3 gap-y-2 bg-[#18253a] px-4 py-2 text-[12px] text-white sm:px-7">
+          <div className="flex min-h-[38px] flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-surface px-4 py-2 text-[12px] text-ink sm:px-7">
             <span className="font-medium">Finish setup to start collecting automatically:</span>
-            <span className="text-slate-300">{me.tenant!.hasUnapprovedTemplates ? "approve your reminder templates." : "turn on your reminder workflow."}</span>
+            <span className="text-muted">{me.tenant!.hasUnapprovedTemplates ? "approve your reminder templates." : "turn on your reminder workflow."}</span>
             <NavLink
               to={me.tenant!.hasUnapprovedTemplates ? "/templates" : "/workflows"}
-              className="rounded-full border border-white/25 px-4 py-1 text-[11px] font-medium hover:bg-white/10 sm:ml-auto"
+              className="rounded-full border border-line px-4 py-1 text-[11px] font-medium hover:bg-bg sm:ml-auto"
             >
               Complete setup
             </NavLink>

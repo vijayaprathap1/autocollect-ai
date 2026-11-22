@@ -7,6 +7,20 @@ import { formatDate, formatMoney, timeAgo } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { StripeWelcome } from "@/components/StripeWelcome";
 
+function Sparkline({ values }: { values: number[] }) {
+  if (values.length < 2) return null;
+  const max = Math.max(...values, 1);
+  const w = 160;
+  const h = 36;
+  const step = w / (values.length - 1);
+  const d = values.map((v, i) => `${i === 0 ? "M" : "L"}${i * step},${h - (v / max) * (h - 4) - 2}`).join(" ");
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="mt-3 h-9 w-full text-primary" role="img" aria-label="Cash collected over the selected range">
+      <path d={d} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 const AGING_LABELS: Record<string, string> = {
   "0-30": "0–30 days",
   "31-60": "31–60 days",
@@ -115,7 +129,7 @@ export function Dashboard() {
           </Card>
         ) : null}
         <div className="mt-8 max-w-[730px]">
-          <Card className="border-slate-200 p-6 shadow-sm lg:p-7">
+          <Card className="border-line p-6 shadow-sm lg:p-7">
             <div className="mb-5 flex items-start justify-between">
               <div>
                 <h2 className="text-lg font-semibold">Onboarding</h2>
@@ -141,7 +155,7 @@ export function Dashboard() {
             </div>
             <ol className="space-y-3">
               {steps.map((step, i) => (
-                <li key={step.href} className={`flex items-center gap-3 rounded-md border px-3 py-3 ${step.done ? "border-slate-200 bg-white" : "border-blue-100 bg-[#f5f7ff]"}`}>
+                <li key={step.href} className={`flex items-center gap-3 rounded-md border px-3 py-3 ${step.done ? "border-line bg-white" : "border-blue-100 bg-[#f5f7ff]"}`}>
                   <span
                     className={
                       "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold " +
@@ -174,7 +188,7 @@ export function Dashboard() {
               { label: "Review invoices", description: "Track your outstanding balance", href: "/invoices" },
               { label: "Add customers", description: "Keep your client records organized", href: "/customers" },
             ].map((item) => (
-              <Link key={item.href} to={item.href} className="rounded-lg border border-slate-200 bg-white p-4 transition-colors hover:border-primary/40 hover:bg-blue-50/40">
+              <Link key={item.href} to={item.href} className="rounded-lg border border-line bg-white p-4 transition-colors hover:border-primary/40 hover:bg-blue-50/40">
                 <div className="text-sm font-semibold text-ink">{item.label}</div>
                 <div className="mt-1 text-xs text-muted">{item.description}</div>
               </Link>
@@ -206,7 +220,7 @@ export function Dashboard() {
                 id="dashboard-range"
                 value={selectedRange}
                 onChange={(event) => setSelectedRange(event.target.value as DashboardRangeKey)}
-                className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-ink shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="h-9 rounded-md border border-line bg-white px-3 text-sm text-ink shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
               >
                 <option value="7d">7 days</option>
                 <option value="30d">30 days</option>
@@ -236,7 +250,7 @@ export function Dashboard() {
           </Card>
           <Card className="min-h-[132px]">
             <div className="text-sm font-medium text-muted">Recovered (30d)</div>
-            <div className="mt-1 text-2xl font-bold text-green-700">{formatMoney(data.recovered30d, currency)}</div>
+            <div className="mt-1 text-2xl font-bold text-success">{formatMoney(data.recovered30d, currency)}</div>
             <div className="mt-1 text-xs text-muted">{data.paidCount30d} paid invoices</div>
           </Card>
           <Card className="min-h-[132px]">
@@ -274,9 +288,10 @@ export function Dashboard() {
           </Card>
           <Card>
             <div className="text-sm font-medium text-muted">Cash collected</div>
-            <div className="mt-1 text-2xl font-bold">
+            <div className="mt-1 text-2xl font-semibold tracking-tight">
               {formatMoney((data.cashCollected ?? []).reduce((sum, row) => sum + row.amount, 0), currency)}
             </div>
+            <Sparkline values={(data.cashCollected ?? []).map((row) => row.amount)} />
             <div className="mt-1 text-xs text-muted">
               {(data.dsoTrend ?? []).length
                 ? `DSO by week: ${(data.dsoTrend ?? []).map((p) => (p.days == null ? "—" : `${p.days}d`)).join(" · ")}`
@@ -299,7 +314,7 @@ export function Dashboard() {
               <Link to="/invoices" className="text-sm font-medium text-primary hover:underline">View invoices</Link>
             </div>
             {data.aging.length === 0 ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-emerald-50 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-success/10 px-4 py-3">
                 <p className="text-sm text-emerald-800">Nothing overdue right now. Nice work.</p>
                 <Link to="/invoices" className="text-sm font-medium text-emerald-800 hover:underline">View open invoices</Link>
               </div>

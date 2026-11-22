@@ -78,13 +78,13 @@ export function CustomerDetail() {
         </Card>
         <Card>
           <label className="text-sm text-muted" htmlFor="segment">Segment</label>
-          <select id="segment" className="mt-2 w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm" value={c.segment ?? ""} onChange={(e) => void saveSegment(e.target.value)}>
+          <select id="segment" className="mt-2 w-full rounded-md border border-line bg-surface px-2 py-2 text-sm" value={c.segment ?? ""} onChange={(e) => void saveSegment(e.target.value)}>
             {SEGMENTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
         </Card>
         <Card>
           <label className="text-sm text-muted" htmlFor="strategy">Collection strategy</label>
-          <select id="strategy" className="mt-2 w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm" defaultValue="" onChange={(e) => void saveStrategy(e.target.value)}>
+          <select id="strategy" className="mt-2 w-full rounded-md border border-line bg-surface px-2 py-2 text-sm" defaultValue="" onChange={(e) => void saveStrategy(e.target.value)}>
             <option value="">Match segment and risk</option>
             {(workflows.data?.workflows ?? []).map((w) => (
               <option key={w.id} value={w.id}>{w.name}{w.segment ? ` · ${w.segment}` : ""}</option>
@@ -166,7 +166,7 @@ function SimpleTable({ headers, rows, empty }: { headers: string[]; rows: ReactN
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead><tr className="text-left text-xs uppercase text-muted">{headers.map((h) => <th key={h} className="py-2 pr-3 font-medium">{h}</th>)}</tr></thead>
-        <tbody>{rows.map((cells, i) => <tr key={i} className="border-t border-slate-100">{cells.map((cell, j) => <td key={j} className="py-2 pr-3">{cell}</td>)}</tr>)}</tbody>
+        <tbody>{rows.map((cells, i) => <tr key={i} className="border-t border-line">{cells.map((cell, j) => <td key={j} className="py-2 pr-3">{cell}</td>)}</tr>)}</tbody>
       </table>
     </div>
   );

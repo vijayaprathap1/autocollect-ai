@@ -63,7 +63,7 @@ export function Customers() {
         <Card className="overflow-x-auto p-0">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-muted">
+              <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
                 <th className="px-4 py-3 font-medium">Customer</th>
                 <th className="px-4 py-3 font-medium">Open invoices</th>
                 <th className="px-4 py-3 font-medium">Outstanding</th>
@@ -72,7 +72,7 @@ export function Customers() {
             </thead>
             <tbody>
               {customers.map((c) => (
-                <tr key={c.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                <tr key={c.id} className="border-b border-line last:border-0 hover:bg-bg">
                   <td className="px-4 py-3">
                     <Link to={`/customers/${c.id}`} className="font-medium text-primary hover:underline">
                       {c.name ?? "Unknown customer"}
