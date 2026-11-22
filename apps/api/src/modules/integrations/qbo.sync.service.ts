@@ -1,6 +1,7 @@
 import { servicePool, withServiceTenant } from "../../lib/db.js";
 import { assertInvoiceCapacity } from "../../lib/billing.js";
-import { qboEnabled, qboMockInvoices, qboQueryInvoices, qboRefreshTokens, QboAuthError, type QboInvoiceLike } from "../../lib/qbo.js";
+import { qboEnabled, qboMockInvoices, qboMockPayments, qboQueryInvoices, qboQueryPayments, qboRefreshTokens, QboAuthError, type QboInvoiceLike, type QboPaymentLike } from "../../lib/qbo.js";
+import { applyCash, recordPayment } from "../../lib/cash-ledger.js";
 import { isProduction } from "../../config.js";
 import { decryptSecret, encryptSecret } from "../../lib/crypto.js";
 
@@ -94,12 +95,75 @@ async function upsertQboInvoice(
   void realmId;
 }
 
+async function upsertQboPayment(tenantId: string, payment: QboPaymentLike): Promise<void> {
+  const amount = toCents(payment.TotalAmt);
+  if (amount <= 0) return;
+  await withServiceTenant(tenantId, async (client) => {
+    let customerId: string | null = null;
+    const externalCustomer = payment.CustomerRef?.value;
+    if (externalCustomer) {
+      const found = await client.query<{ id: string }>(
+        `SELECT id FROM customers WHERE tenant_id = $1 AND source = 'qbo' AND external_id = $2`,
+        [tenantId, externalCustomer],
+      );
+      customerId = found.rows[0]?.id ?? null;
+    }
+    const recorded = await recordPayment(client, {
+      tenantId,
+      customerId,
+      source: "qbo",
+      externalId: String(payment.Id),
+      amount,
+      currency: payment.CurrencyRef?.value?.toLowerCase() ?? "usd",
+      paidAt: payment.TxnDate ? `${payment.TxnDate}T00:00:00Z` : undefined,
+      reference: "QuickBooks payment",
+    });
+    if (Number(recorded.unapplied) <= 0) return;
+    const links = (payment.Line ?? []).flatMap((line) =>
+      (line.LinkedTxn ?? [])
+        .filter((txn) => txn.TxnType === "Invoice" && txn.TxnId)
+        .map((txn) => ({ invoiceExternalId: String(txn.TxnId), amount: toCents(line.Amount) })),
+    );
+    const lines: { invoiceId: string; amount: number }[] = [];
+    for (const link of links) {
+      if (link.amount <= 0) continue;
+      const invoice = await client.query<{ id: string; status: string; amount_due: number }>(
+        `SELECT id, status, amount_due FROM invoices WHERE tenant_id = $1 AND source = 'qbo' AND external_id = $2`,
+        [tenantId, link.invoiceExternalId],
+      );
+      const row = invoice.rows[0];
+      if (!row) continue;
+      if ((row.status === "open" || row.status === "paused") && Number(row.amount_due) >= link.amount) {
+        lines.push({ invoiceId: row.id, amount: link.amount });
+      } else if (row.status === "paid") {
+        await client.query(
+          `INSERT INTO cash_applications (tenant_id, payment_id, invoice_id, amount, method) VALUES ($1, $2, $3, $4, 'exact')`,
+          [tenantId, recorded.id, row.id, link.amount],
+        );
+        await client.query(`UPDATE payments SET unapplied = GREATEST(unapplied - $3, 0) WHERE id = $1 AND tenant_id = $2`, [
+          recorded.id,
+          tenantId,
+          link.amount,
+        ]);
+      }
+    }
+    if (lines.length) {
+      await applyCash(
+        client,
+        { tenantId, paymentId: recorded.id, lines, userId: null, method: lines.length > 1 ? "multi" : "exact" },
+        { transaction: false },
+      );
+    }
+  });
+}
+
 async function syncOne(integration: QboIntegration): Promise<number> {
   const { tenant_id: tenantId, credentials } = integration;
 
   let invoices: QboInvoiceLike[];
+  let accessToken = "";
   if (qboEnabled) {
-    let accessToken = credentials.access_token ? decryptSecret(credentials.access_token) : "";
+    accessToken = credentials.access_token ? decryptSecret(credentials.access_token) : "";
     if (credentials.refresh_token && credentials.expires_at && Date.parse(credentials.expires_at) <= Date.now()) {
       const refreshed = await qboRefreshTokens(decryptSecret(credentials.refresh_token));
       accessToken = refreshed.accessToken;
@@ -125,6 +189,16 @@ async function syncOne(integration: QboIntegration): Promise<number> {
 
   for (const inv of invoices) {
     await upsertQboInvoice(tenantId, credentials.realm_id ?? "", inv);
+  }
+
+  let payments: QboPaymentLike[];
+  if (qboEnabled) {
+    payments = credentials.realm_id && accessToken ? await qboQueryPayments(accessToken, credentials.realm_id, integration.settings.last_sync_at) : [];
+  } else {
+    payments = isProduction ? [] : qboMockPayments();
+  }
+  for (const payment of payments) {
+    await upsertQboPayment(tenantId, payment);
   }
 
   await servicePool.query(

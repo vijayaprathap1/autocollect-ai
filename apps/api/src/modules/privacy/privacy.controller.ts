@@ -8,7 +8,7 @@ import { stripe, stripeEnabled } from "../../lib/stripe.js";
 import { config } from "../../config.js";
 
 /** Tables exported verbatim (all tenant-scoped). Integration credentials are never exported. */
-const EXPORT_TABLES = ["customers", "customer_contacts", "invoices", "messages", "replies", "disputes", "dispute_notes", "promises", "tasks", "workflows", "templates", "credit_transactions", "audit_log"] as const;
+const EXPORT_TABLES = ["customers", "customer_contacts", "invoices", "messages", "replies", "disputes", "dispute_notes", "promises", "tasks", "workflows", "templates", "credit_transactions", "payments", "cash_applications", "credit_reviews", "saved_filters", "notifications", "audit_log"] as const;
 
 const STRICT_LIMIT = { max: 5, timeWindow: "1 minute" };
 

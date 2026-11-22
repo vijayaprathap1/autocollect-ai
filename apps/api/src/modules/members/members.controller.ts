@@ -51,7 +51,7 @@ export async function membersRoutes(app: FastifyInstance) {
   /** Change a member's role. Owners only; a workspace always keeps at least one owner. */
   app.put("/users/:id/role", { preHandler: requireRole("owner") }, async (req) => {
     const userId = assertUuid((req.params as { id: string }).id, "Member");
-    const { role } = z.object({ role: z.enum(["owner", "admin", "member"]) }).parse(req.body ?? {});
+    const { role } = z.object({ role: z.enum(["owner", "admin", "manager", "collector", "viewer", "member"]) }).parse(req.body ?? {});
     await withServiceTransaction(async (client) => {
       const owners = await client.query<{ user_id: string }>(
         `SELECT user_id FROM memberships WHERE tenant_id = $1 AND role = 'owner' AND status = 'active' FOR UPDATE`,
@@ -166,7 +166,7 @@ export async function membersRoutes(app: FastifyInstance) {
 
   app.post("/invitations", { preHandler: requireRole("admin"), config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (req) => {
     const body = z
-      .object({ email: emailSchema, role: z.enum(["admin", "member"]).default("member") })
+      .object({ email: emailSchema, role: z.enum(["admin", "manager", "collector", "viewer", "member"]).default("member") })
       .parse(req.body ?? {});
     // Only owners may invite admins.
     if (body.role === "admin" && req.user.role !== "owner") throw forbidden("Only owners can invite admins");

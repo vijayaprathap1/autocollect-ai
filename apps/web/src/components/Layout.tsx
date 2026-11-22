@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMe } from "@/lib/me";
 import { cn } from "@/components/ui";
 import { hexToRgbTriple } from "@/lib/format";
-import { getOrganizations, logout, switchOrganization } from "@/lib/api";
+import { getNotifications, getOrganizations, logout, markNotificationRead, searchWorkspace, switchOrganization } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 
 const navItems = [
@@ -14,6 +14,10 @@ const navItems = [
   { to: "/customers", label: "Customers" },
   { to: "/disputes", label: "Disputes" },
   { to: "/promises", label: "Promises" },
+  { to: "/cash", label: "Cash" },
+  { to: "/credit", label: "Credit" },
+  { to: "/forecast", label: "Forecast" },
+  { to: "/analytics", label: "Analytics" },
   { to: "/workflows", label: "Workflows" },
   { to: "/templates", label: "Templates" },
   { to: "/replies", label: "Replies" },
@@ -98,8 +102,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const branding = me.tenant?.branding ?? {};
   const appName = branding.appName || "AutoCollect AI";
 
-  return (
-    <>
+    return (
+    <div className="flex h-full min-h-0 flex-col">
       <div className="border-b border-line px-5 py-5">
         {branding.logoUrl ? (
           <img src={branding.logoUrl} alt={appName} className="h-7 w-auto max-w-[180px]" />
@@ -111,7 +115,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         )}
         <WorkspaceSwitcher onSwitched={onNavigate} />
       </div>
-      <nav className="flex flex-col gap-0.5 px-3 py-4" aria-label="Primary navigation">
+      <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-4" aria-label="Primary navigation">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
@@ -128,7 +132,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </NavLink>
         ))}
       </nav>
-      <div className="mt-auto space-y-2 border-t border-line px-5 py-4 text-xs text-muted">
+      <div className="shrink-0 space-y-2 border-t border-line px-5 py-4 text-xs text-muted">
         <ThemeToggle />
         <div className="truncate font-medium text-ink" title={me.user.email}>
           {me.user.displayName || me.user.email}
@@ -144,7 +148,92 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </button>
         </div>
       </div>
-    </>
+    </div>
+  );
+}
+
+function CommandPalette() {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<{ label: string; to: string }[]>([]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setOpen((v) => !v);
+      }
+      if (e.key === "Escape") setOpen(false);
+    };
+    const openSearch = () => setOpen(true);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("autocollect:search", openSearch);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("autocollect:search", openSearch);
+    };
+  }, []);
+  useEffect(() => {
+    if (!open || q.trim().length < 2) {
+      setHits(navItems.map((item) => ({ label: item.label, to: item.to })));
+      return;
+    }
+    const handle = setTimeout(() => {
+      searchWorkspace(q.trim())
+        .then((res) => {
+          setHits([
+            ...res.customers.map((c) => ({ label: c.name ?? "Customer", to: `/customers/${c.id}` })),
+            ...res.invoices.map((i) => ({ label: i.external_id ?? "Invoice", to: `/invoices/${i.id}` })),
+          ]);
+        })
+        .catch(() => setHits([]));
+    }, 150);
+    return () => clearTimeout(handle);
+  }, [q, open]);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[12vh]" onClick={() => setOpen(false)}>
+      <div role="dialog" aria-label="Search" className="w-full max-w-lg rounded-2xl border border-line bg-surface p-3 shadow-card" onClick={(e) => e.stopPropagation()}>
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Jump to a page, customer or invoice" className="w-full rounded-xl border border-line bg-bg px-3 py-2 text-sm text-ink" />
+        <ul className="mt-2 max-h-72 overflow-auto">
+          {hits.map((hit) => (
+            <li key={hit.to + hit.label}>
+              <button type="button" className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-bg" onClick={() => { setOpen(false); navigate(hit.to); }}>
+                {hit.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <p className="px-3 pt-2 text-xs text-muted">Ctrl or Cmd K</p>
+      </div>
+    </div>
+  );
+}
+
+function NotificationBell() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const notes = useQuery({ queryKey: ["notifications"], queryFn: getNotifications, refetchInterval: 60_000 });
+  const unread = (notes.data?.notifications ?? []).filter((n) => !n.read_at);
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative flex items-center gap-2">
+      <button type="button" className="rounded-full border border-line px-3 py-1 text-xs" onClick={() => window.dispatchEvent(new Event("autocollect:search"))}>
+        Search
+      </button>
+      <button type="button" aria-label={unread.length ? `${unread.length} unread notifications` : "Notifications"} className="rounded-full border border-line px-3 py-1 text-xs" onClick={() => setOpen((v) => !v)}>
+        Alerts{unread.length ? ` (${unread.length})` : ""}
+      </button>
+      {open && (
+        <div className="absolute right-0 z-30 mt-2 w-72 rounded-2xl border border-line bg-surface p-2 shadow-card">
+          {(notes.data?.notifications ?? []).length === 0 ? <p className="px-2 py-3 text-sm text-muted">No alerts yet.</p> : notes.data?.notifications.map((n) => (
+            <button key={n.id} type="button" className="block w-full rounded-lg px-2 py-2 text-left text-sm hover:bg-bg" onClick={() => { void markNotificationRead(n.id).then(() => queryClient.invalidateQueries({ queryKey: ["notifications"] })); setOpen(false); if (n.href) navigate(n.href); }}>
+              <span className={n.read_at ? "text-muted" : "font-medium"}>{n.title}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -230,9 +319,13 @@ export function Layout() {
             )}
           </div>
         )}
-        <div className="p-4 sm:p-8 lg:p-12">
+        <div className="flex justify-end px-4 pt-4 sm:px-8 lg:px-12">
+          <NotificationBell />
+        </div>
+        <div className="p-4 pt-2 sm:p-8 sm:pt-2 lg:px-12">
           <Outlet />
         </div>
+        <CommandPalette />
       </main>
     </div>
   );

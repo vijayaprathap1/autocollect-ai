@@ -123,10 +123,12 @@ Steps:
 5. **Scheduler** — long-lived hosts run the Postgres job worker in the API process
    (`RUN_SCHEDULER=true`) or as `node dist/worker.js`. Jobs are leased (`SKIP LOCKED`),
    so a crash retries without double-charging a reminder credit. On Vercel, nothing
-   stays resident: keep the daily crons in `vercel.json` as a safety net and, on Pro,
-   change `/api/cron/dunning` to `*/5 * * * *`. That endpoint enqueues the same jobs
-   and runs them before the function returns. The GitHub Actions schedule is not
-   required; `.github/workflows/cron.yml` is a manual backup only.
+   stays resident. The committed `vercel.json` cron calls `/api/cron/dunning` once a
+   day at 06:00 UTC, which enqueues the job queue and runs it inside that request.
+   That daily schedule is what production uses. A 5-minute schedule (`*/5 * * * *`)
+   needs a Vercel plan that allows sub-daily crons. Otherwise run `node dist/worker.js`
+   on a VM or container with `RUN_SCHEDULER=false` on the web replicas. The GitHub
+   Actions workflow is a manual backup only.
 
 Limits to know: 60 s per invocation (dunning is time-budgeted and resumes on the next trigger). Rate limits
 are counted per function instance unless `REDIS_URL` is set — create a free Upstash Redis database (Vercel
@@ -271,3 +273,16 @@ run `db:migrate` (idempotent) and the smoke test.
 - [ ] `npm audit --omit=dev` clean (CI enforces `high`)
 - [ ] `REDIS_URL` set when running on Vercel or more than one replica
 - [ ] Every workspace sets a business address (Settings → Branding) — shown in reminder footers
+
+### Roles
+`owner` and `admin` manage the workspace. `manager` can set credit limits and decide reviews. `collector` and `member` can record and apply cash, pause invoices, and save filters. `viewer` can read. The API checks the role on every write. Postgres RLS plus `WHERE tenant_id = $1` isolates every new table (`payments`, `cash_applications`, `credit_reviews`, `saved_filters`, `notifications`).
+
+### OWASP notes for this release
+- Broken access control: new writes use `requireRole`. Viewers receive 403. RLS tests cover the new tables.
+- Injection: query parameters go through zod. Search uses bound `ILIKE` with escaped wildcards. CSV/Excel export prefixes cells that start with `=`, `+`, `-` or `@` so a spreadsheet does not execute them.
+- Identification failures: session cookies stay httpOnly. 2FA stays opt-in. Auth and cash-import routes are rate limited. Set `REDIS_URL` when more than one instance serves traffic so the limit is shared.
+- Security misconfiguration: production boot still refuses missing secrets. Dev-login and Stripe simulators stay off when `NODE_ENV=production`.
+- Sensitive data: payment receipts store amounts and references, not card numbers. Stripe remains the only payment processor. Exports are audited.
+- Logging: user and system actions (cash applied, credit decisions, imports, exports, Stripe receipts) append to `audit_log`.
+
+Cash application reads Stripe invoice payments, Payment Links, charges without an invoice, and payouts. QuickBooks payments and a CSV (`payment_id`, `amount`, optional `invoice_number`) land in the same ledger. A payout is the bank deposit of charges you may already have applied; dismiss it from Cash when the invoices are already closed.

@@ -1,6 +1,7 @@
-import { servicePool, withServiceTenant } from "../../lib/db.js";
+import { servicePool, withServiceTenant, withServiceTransaction } from "../../lib/db.js";
 import { assertInvoiceCapacity } from "../../lib/billing.js";
 import { reconcilePromises } from "../../lib/collections.js";
+import { bookSettledReceipt, recordPayment } from "../../lib/cash-ledger.js";
 
 /** Minimal shape of a Stripe Invoice object (see Stripe API docs). */
 export type StripeInvoiceLike = {
@@ -105,36 +106,67 @@ export async function ingestStripeInvoice(tenantId: string, inv: StripeInvoiceLi
   });
 }
 
-/** On `invoice.paid`, stop the dunning sequence and mark the invoice paid. */
+async function settleStripeInvoice(
+  tenantId: string,
+  whereSql: string,
+  whereParam: string,
+  externalId: string,
+  reference: string,
+): Promise<boolean> {
+  const changed = await withServiceTransaction(async (client) => {
+    const existing = await client.query<{ id: string; customer_id: string | null; amount_due: number; currency: string; status: string }>(
+      `SELECT id, customer_id, amount_due, currency, status FROM invoices
+        WHERE tenant_id = $1 AND ${whereSql} FOR UPDATE`,
+      [tenantId, whereParam],
+    );
+    const row = existing.rows[0];
+    if (!row || row.status === "paid") return false;
+    const amount = Number(row.amount_due);
+    if (amount > 0) {
+      await bookSettledReceipt(client, {
+        tenantId,
+        customerId: row.customer_id,
+        source: "stripe",
+        externalId,
+        amount,
+        currency: (row.currency || "usd").toLowerCase(),
+        invoiceId: row.id,
+        reference,
+      });
+    }
+    await client.query(
+      `UPDATE invoices
+          SET status = 'paid', next_step_index = 9999, next_step_due_at = NULL,
+              payment_link_status = CASE WHEN payment_link IS NULL THEN payment_link_status ELSE 'paid' END,
+              updated_at = now()
+        WHERE id = $1 AND tenant_id = $2 AND status <> 'paid'`,
+      [row.id, tenantId],
+    );
+    return true;
+  });
+  if (changed) await reconcilePromises().catch(() => {});
+  return changed;
+}
+
+/** On `invoice.paid`, stop the dunning sequence, book the receipt, and mark the invoice paid. */
 export async function markInvoicePaid(tenantId: string, invoiceExternalId: string): Promise<void> {
-  await servicePool.query(
-    `UPDATE invoices
-        SET status = 'paid', next_step_index = 9999, next_step_due_at = NULL, updated_at = now()
-      WHERE tenant_id = $1 AND source = 'stripe' AND external_id = $2 AND status <> 'paid'`,
-    [tenantId, invoiceExternalId],
+  await settleStripeInvoice(
+    tenantId,
+    "source = 'stripe' AND external_id = $2",
+    invoiceExternalId,
+    `invoice:${invoiceExternalId}`,
+    "Stripe invoice",
   );
-  await reconcilePromises().catch(() => {});
 }
 
 /** Mark one of our invoices paid by its internal id (Payment Link payments). */
 export async function markInvoicePaidById(tenantId: string, invoiceId: string): Promise<void> {
-  const res = await servicePool.query(
-    `UPDATE invoices
-        SET status = 'paid', next_step_index = 9999, next_step_due_at = NULL, updated_at = now()
-      WHERE tenant_id = $1 AND id::text = $2 AND status <> 'paid'`,
-    [tenantId, invoiceId],
-  );
-  if (res.rowCount) {
-    await servicePool.query(
-      `UPDATE invoices SET payment_link_status = CASE WHEN payment_link IS NULL THEN payment_link_status ELSE 'paid' END
-        WHERE tenant_id = $1 AND id::text = $2`,
-      [tenantId, invoiceId],
-    );
+  const changed = await settleStripeInvoice(tenantId, "id::text = $2", invoiceId, `paylink:${invoiceId}`, "Stripe Payment Link");
+  if (changed) {
     await servicePool.query(
       `INSERT INTO audit_log (tenant_id, actor, action, detail) VALUES ($1, 'stripe', 'invoice_paid_via_payment_link', $2::jsonb)`,
       [tenantId, JSON.stringify({ invoice_id: invoiceId })],
     );
-    await reconcilePromises().catch(() => {});
   }
 }
 
@@ -153,6 +185,34 @@ export async function recordPaymentFailure(tenantId: string, invoiceExternalId: 
     `INSERT INTO audit_log (tenant_id, actor, action, detail) VALUES ($1, 'stripe', 'invoice_payment_failed', $2::jsonb)`,
     [tenantId, JSON.stringify({ invoice_external_id: invoiceExternalId, failure_reason: reason, failure_code: code })],
   );
+}
+
+/** A Stripe charge or payout that does not name an invoice waits in the unapplied queue. */
+export async function recordUnappliedStripeCash(
+  tenantId: string,
+  input: { externalId: string; amount: number; currency: string; reference: string },
+): Promise<void> {
+  if (!Number.isInteger(input.amount) || input.amount <= 0) return;
+  await withServiceTransaction(async (client) => {
+    const payment = await recordPayment(client, {
+      tenantId,
+      customerId: null,
+      source: "stripe",
+      externalId: input.externalId,
+      amount: input.amount,
+      currency: input.currency.toLowerCase(),
+      reference: input.reference,
+    });
+    if (!payment.created) return;
+    await client.query(
+      `INSERT INTO notifications (tenant_id, kind, title, body, href) VALUES ($1, 'cash', $2, $3, '/cash')`,
+      [tenantId, "Unapplied Stripe cash", input.reference],
+    );
+    await client.query(`INSERT INTO audit_log (tenant_id, actor, action, detail) VALUES ($1, 'stripe', 'payment_recorded', $2::jsonb)`, [
+      tenantId,
+      JSON.stringify({ payment_id: payment.id, amount: input.amount, reference: input.reference }),
+    ]);
+  });
 }
 
 /** Resolve the tenant that owns an ACTIVE Stripe connected account (webhook routing). */
