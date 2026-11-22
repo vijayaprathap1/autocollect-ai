@@ -89,9 +89,9 @@ export async function applyCash(
                 status = CASE WHEN amount_due - $3 <= 0 THEN 'paid' ELSE status END,
                 next_step_index = CASE WHEN amount_due - $3 <= 0 THEN 9999 ELSE next_step_index END,
                 next_step_due_at = CASE WHEN amount_due - $3 <= 0 THEN NULL ELSE next_step_due_at END,
-                payment_link = CASE WHEN amount_due - $3 > 0 THEN NULL ELSE payment_link END,
-                stripe_payment_link_id = CASE WHEN amount_due - $3 > 0 THEN NULL ELSE stripe_payment_link_id END,
-                payment_link_status = CASE WHEN amount_due - $3 > 0 THEN NULL ELSE payment_link_status END,
+                payment_link = CASE WHEN amount_due - $3 > 0 AND stripe_payment_link_id IS NOT NULL THEN NULL ELSE payment_link END,
+                stripe_payment_link_id = CASE WHEN amount_due - $3 > 0 AND stripe_payment_link_id IS NOT NULL THEN NULL ELSE stripe_payment_link_id END,
+                payment_link_status = CASE WHEN amount_due - $3 > 0 AND stripe_payment_link_id IS NOT NULL THEN NULL ELSE payment_link_status END,
                 updated_at = now()
           WHERE id = $1 AND tenant_id = $2 AND status IN ('open', 'paused') AND amount_due >= $3`,
         [line.invoiceId, input.tenantId, line.amount],

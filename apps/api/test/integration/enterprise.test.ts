@@ -122,6 +122,61 @@ describe("enterprise AR", () => {
     expect(Date.now() - started).toBeLessThan(5000);
   });
 
+  it("books manual payments, blocks held reminders, and keeps non-Stripe pay links", async () => {
+    const a = await workspace(`ent-fix-${Date.now().toString(36)}@example.com`, "Ent Fix");
+    const customer = await db.servicePool.query<{ id: string }>(
+      `INSERT INTO customers (tenant_id, source, external_id, name, email) VALUES ($1, 'csv', 'fix', 'Fix Buyer', 'fix@example.com') RETURNING id`,
+      [a.tenantId],
+    );
+    const hosted = await db.servicePool.query<{ id: string }>(
+      `INSERT INTO invoices (tenant_id, customer_id, source, external_id, amount_due, currency, status, payment_link)
+       VALUES ($1, $2, 'csv', 'HOSTED', 5000, 'usd', 'open', 'https://pay.example/hosted') RETURNING id`,
+      [a.tenantId, customer.rows[0].id],
+    );
+    const linked = await db.servicePool.query<{ id: string }>(
+      `INSERT INTO invoices (tenant_id, customer_id, source, external_id, amount_due, currency, status, payment_link, stripe_payment_link_id)
+       VALUES ($1, $2, 'csv', 'LINKED', 8000, 'usd', 'open', 'https://pay.stripe.com/old', 'plink_test') RETURNING id`,
+      [a.tenantId, customer.rows[0].id],
+    );
+    const marked = await call(a.jar, "POST", `/invoices/${hosted.rows[0].id}/actions`, { action: "mark_paid" });
+    expect(marked.status).toBe(200);
+    const dash = await call(a.jar, "GET", "/dashboard");
+    expect(dash.body.recovered30d).toBe(5000);
+    const stillHosted = await db.servicePool.query<{ payment_link: string }>(`SELECT payment_link FROM invoices WHERE id = $1`, [hosted.rows[0].id]);
+    expect(stillHosted.rows[0].payment_link).toBe("https://pay.example/hosted");
+
+    await db.servicePool.query(`UPDATE customers SET credit_status = 'hold' WHERE id = $1`, [customer.rows[0].id]);
+    const held = await call(a.jar, "POST", `/invoices/${linked.rows[0].id}/actions`, { action: "send_now" });
+    expect(held.status).toBe(409);
+    expect(held.body.error.code).toBe("CREDIT_HOLD");
+
+    const receipt = await call(a.jar, "POST", "/cash/payments", { customerId: customer.rows[0].id, externalId: "partial", amount: 3000, currency: "usd" });
+    expect(receipt.status).toBe(201);
+    const applied = await call(a.jar, "POST", `/cash/payments/${receipt.body.payment.id}/apply`, {
+      lines: [{ invoiceId: linked.rows[0].id, amount: 3000 }],
+    });
+    expect(applied.status).toBe(200);
+    const after = await db.servicePool.query<{ payment_link: string | null; stripe_payment_link_id: string | null }>(
+      `SELECT payment_link, stripe_payment_link_id FROM invoices WHERE id = $1`,
+      [linked.rows[0].id],
+    );
+    expect(after.rows[0].payment_link).toBeNull();
+    expect(after.rows[0].stripe_payment_link_id).toBeNull();
+
+    await db.servicePool.query(
+      `INSERT INTO integrations (tenant_id, source, status, credentials) VALUES ($1, 'qbo', 'active', '{"refresh_token":"secret"}'::jsonb)`,
+      [a.tenantId],
+    );
+    const off = await call(a.jar, "POST", "/integrations/qbo/disconnect");
+    expect(off.status).toBe(200);
+    const stored = await db.servicePool.query<{ status: string; credentials: Record<string, unknown> }>(
+      `SELECT status, credentials FROM integrations WHERE tenant_id = $1 AND source = 'qbo'`,
+      [a.tenantId],
+    );
+    expect(stored.rows[0].status).toBe("disconnected");
+    expect(stored.rows[0].credentials).toEqual({});
+  });
+
   it("row level security hides the new tables from another tenant", async () => {
     const pg = (await import("pg")).default;
     const owner = new pg.Client({ connectionString: process.env.MIGRATION_DATABASE_URL || process.env.DATABASE_URL });
