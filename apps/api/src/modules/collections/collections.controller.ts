@@ -21,6 +21,9 @@ function mapCustomer(r: {
   collector_user_id: string | null;
   source: string;
   sms_opt_out: boolean;
+  credit_status?: string;
+  credit_limit?: number | null;
+  credit_hold_reason?: string | null;
 }) {
   return {
     id: r.id,
@@ -33,6 +36,9 @@ function mapCustomer(r: {
     collectorUserId: r.collector_user_id,
     source: r.source,
     smsOptOut: r.sms_opt_out,
+    creditStatus: r.credit_status ?? "ok",
+    creditLimit: r.credit_limit == null ? null : Number(r.credit_limit),
+    creditHoldReason: r.credit_hold_reason ?? null,
   };
 }
 
@@ -46,6 +52,7 @@ export async function collectionRoutes(app: FastifyInstance) {
       segment: string | null;
       risk_score: number;
       collector_user_id: string | null;
+      credit_status: string;
       open_total: number;
       open_count: number;
       days_overdue: number;
@@ -54,7 +61,7 @@ export async function collectionRoutes(app: FastifyInstance) {
       open_tasks: number;
       next_task_on: string | null;
     }>(
-      `SELECT c.id, c.name, c.email, c.company, c.segment, c.risk_score, c.collector_user_id,
+      `SELECT c.id, c.name, c.email, c.company, c.segment, c.risk_score, c.collector_user_id, c.credit_status,
               COALESCE(SUM(i.amount_due) FILTER (WHERE i.status = 'open'), 0)::bigint AS open_total,
               COUNT(i.id) FILTER (WHERE i.status = 'open')::int AS open_count,
               COALESCE(MAX(CURRENT_DATE - i.due_date) FILTER (WHERE i.status = 'open' AND i.due_date < CURRENT_DATE), 0)::int AS days_overdue,
@@ -89,6 +96,7 @@ export async function collectionRoutes(app: FastifyInstance) {
         segment: r.segment,
         riskScore: score,
         collectorUserId: r.collector_user_id,
+        creditStatus: r.credit_status,
         openTotal: Number(r.open_total),
         openCount: r.open_count,
         daysOverdue: r.days_overdue,
@@ -106,7 +114,8 @@ export async function collectionRoutes(app: FastifyInstance) {
     const id = assertUuid((req.params as { id: string }).id, "Customer");
     const tenantId = req.user.tenantId;
     const customer = await req.db.query(
-      `SELECT id, name, email, phone, company, segment, risk_score, collector_user_id, source, sms_opt_out
+      `SELECT id, name, email, phone, company, segment, risk_score, collector_user_id, source, sms_opt_out,
+              credit_status, credit_limit, credit_hold_reason
          FROM customers WHERE id = $1 AND tenant_id = $2`,
       [id, tenantId],
     );
@@ -153,7 +162,15 @@ export async function collectionRoutes(app: FastifyInstance) {
          FROM tasks WHERE customer_id = $1 AND tenant_id = $2 ORDER BY status = 'open' DESC, due_on NULLS LAST`,
       [id, tenantId],
     );
-    const paid = invoices.rows.filter((i: { status: string }) => i.status === "paid");
+    const payments = await req.db.query(
+      `SELECT a.id, p.external_id, a.amount, p.currency, p.source, i.external_id AS invoice_external_id, a.created_at
+         FROM cash_applications a
+         JOIN payments p ON p.id = a.payment_id AND p.tenant_id = a.tenant_id
+         LEFT JOIN invoices i ON i.id = a.invoice_id
+        WHERE a.tenant_id = $2 AND (p.customer_id = $1 OR i.customer_id = $1)
+        ORDER BY a.created_at DESC LIMIT 50`,
+      [id, tenantId],
+    );
     return {
       customer: mapCustomer(customer.rows[0]),
       contacts: contacts.rows,
@@ -163,7 +180,7 @@ export async function collectionRoutes(app: FastifyInstance) {
       disputes: disputes.rows,
       promises: promises.rows.map(moneyPromise),
       tasks: tasks.rows,
-      payments: paid.map(moneyInvoice),
+      payments: payments.rows.map((row: { amount?: number } & Record<string, unknown>) => ({ ...row, amount: Number(row.amount) })),
     };
   });
 
@@ -512,7 +529,7 @@ export async function collectionRoutes(app: FastifyInstance) {
     return reply.status(201).send({ task: row.rows[0] });
   });
 
-  app.patch("/tasks/:id", async (req) => {
+  app.patch("/tasks/:id", { preHandler: requireRole("member") }, async (req) => {
     const id = assertUuid((req.params as { id: string }).id, "Task");
     const body = z
       .object({

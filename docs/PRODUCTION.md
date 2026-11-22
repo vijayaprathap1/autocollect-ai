@@ -285,4 +285,6 @@ run `db:migrate` (idempotent) and the smoke test.
 - Sensitive data: payment receipts store amounts and references, not card numbers. Stripe remains the only payment processor. Exports are audited.
 - Logging: user and system actions (cash applied, credit decisions, imports, exports, Stripe receipts) append to `audit_log`.
 
-Cash application reads Stripe invoice payments, Payment Links, charges without an invoice, and payouts. QuickBooks payments and a CSV (`payment_id`, `amount`, optional `invoice_number`) land in the same ledger. A payout is the bank deposit of charges you may already have applied; dismiss it from Cash when the invoices are already closed.
+Cash application reads Stripe invoice payments, Payment Links, charges without an invoice, and payouts. QuickBooks payments and a CSV (`payment_id` / `reference` / `Payment ID`, `amount`, optional `invoice_number`) land in the same ledger. Header matching ignores case and spaces. A payout is the bank deposit of charges you may already have applied; dismiss it from Cash when the invoices are already closed.
+
+Collected cash (Recovered, the cash chart, CEI, collector productivity, and the customer Payments list) sums `cash_applications`, because applying cash reduces `invoices.amount_due` to the remainder. A credit hold stops the automatic reminder run for that customer and refuses a new payment link. An existing Stripe link is left in place. Approving the account lets the next dunning run continue. A partial payment clears a stored payment link so the next one is created for the remaining balance.

@@ -1,5 +1,6 @@
 import type { Queryable } from "./db.js";
 import { suggestApplications, type MatchInvoice, type SuggestedLine } from "./cash-match.js";
+import { deactivateStripePaymentLinks } from "./pay-link.js";
 
 export type PaymentInput = {
   tenantId: string;
@@ -67,6 +68,7 @@ export async function applyCash(
   const total = input.lines.reduce((sum, line) => sum + line.amount, 0);
   if (total <= 0) throw new Error("Nothing to apply");
   const ownTransaction = options.transaction !== false;
+  const retired: string[] = [];
   if (ownTransaction) await db.query("BEGIN");
   try {
     const locked = await db.query<{ unapplied: number }>(
@@ -76,16 +78,31 @@ export async function applyCash(
     if (!locked.rows[0]) throw new Error("Payment not found");
     if (Number(locked.rows[0].unapplied) < total) throw new Error("That receipt does not have enough unapplied cash");
     for (const line of input.lines) {
+      const prior = await db.query<{ stripe_payment_link_id: string | null; amount_due: number }>(
+        `SELECT stripe_payment_link_id, amount_due FROM invoices
+          WHERE id = $1 AND tenant_id = $2 AND status IN ('open', 'paused') FOR UPDATE`,
+        [line.invoiceId, input.tenantId],
+      );
       const updated = await db.query(
         `UPDATE invoices
             SET amount_due = amount_due - $3,
                 status = CASE WHEN amount_due - $3 <= 0 THEN 'paid' ELSE status END,
                 next_step_index = CASE WHEN amount_due - $3 <= 0 THEN 9999 ELSE next_step_index END,
                 next_step_due_at = CASE WHEN amount_due - $3 <= 0 THEN NULL ELSE next_step_due_at END,
+                payment_link = CASE WHEN amount_due - $3 > 0 THEN NULL ELSE payment_link END,
+                stripe_payment_link_id = CASE WHEN amount_due - $3 > 0 THEN NULL ELSE stripe_payment_link_id END,
+                payment_link_status = CASE WHEN amount_due - $3 > 0 THEN NULL ELSE payment_link_status END,
                 updated_at = now()
           WHERE id = $1 AND tenant_id = $2 AND status IN ('open', 'paused') AND amount_due >= $3`,
         [line.invoiceId, input.tenantId, line.amount],
       );
+      if (
+        updated.rowCount &&
+        prior.rows[0]?.stripe_payment_link_id &&
+        Number(prior.rows[0].amount_due) - line.amount > 0
+      ) {
+        retired.push(prior.rows[0].stripe_payment_link_id);
+      }
       if (!updated.rowCount) throw new Error("An invoice could not take that amount");
       await db.query(
         `INSERT INTO cash_applications (tenant_id, payment_id, invoice_id, amount, method, applied_by)
@@ -104,6 +121,7 @@ export async function applyCash(
       JSON.stringify({ payment_id: input.paymentId, amount: total, lines: input.lines.length }),
     ]);
     if (ownTransaction) await db.query("COMMIT");
+    if (retired.length) await deactivateStripePaymentLinks(input.tenantId, retired).catch(() => {});
     return { applied: total };
   } catch (err) {
     if (ownTransaction) await db.query("ROLLBACK");

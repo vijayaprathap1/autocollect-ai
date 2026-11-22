@@ -88,12 +88,27 @@ describe("enterprise AR", () => {
       acceptSuggestion: true,
     });
     expect(applied.status).toBe(200);
+    const dash = await call(a.jar, "GET", "/dashboard");
+    expect(dash.body.recovered30d).toBe(10000);
+    const cust = await call(a.jar, "GET", `/customers/${customer.rows[0].id}`);
+    expect(cust.body.payments[0].amount).toBe(10000);
+    const task = await call(a.jar, "POST", "/tasks", { title: "Call them", customerId: customer.rows[0].id });
+    expect(task.status).toBe(201);
+    const exported = await app.inject({
+      method: "GET",
+      url: "/exports/invoices?format=csv&status=paid",
+      headers: { cookie: a.jar.header(), ...ORIGIN },
+    });
+    expect(exported.body).toContain("0.00");
+    expect(exported.body).not.toContain("10000");
     const other = await call(b.jar, "GET", "/cash/payments?unapplied=1");
     expect(other.body.payments.find((p: { id: string }) => p.id === created.body.payment.id)).toBeUndefined();
 
     await db.servicePool.query(`UPDATE memberships SET role = 'viewer' WHERE user_id = $1 AND tenant_id = $2`, [a.userId, a.tenantId]);
     const denied = await call(a.jar, "POST", "/cash/payments", { externalId: "wire-2", amount: 1000 });
     expect(denied.status).toBe(403);
+    const taskDenied = await call(a.jar, "PATCH", `/tasks/${task.body.task.id}`, { status: "done" });
+    expect(taskDenied.status).toBe(403);
 
     const forecast = await call(b.jar, "GET", "/forecast");
     expect(forecast.status).toBe(200);

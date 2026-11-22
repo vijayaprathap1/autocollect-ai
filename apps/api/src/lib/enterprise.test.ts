@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
+import { paymentCsvField } from "./payment-csv.js";
 import { suggestApplications } from "./cash-match.js";
 import { creditStanding } from "./credit.js";
 import { forecastCollections } from "./forecast.js";
+
+describe("payment csv headers", () => {
+  it("matches aliases regardless of case and spaces", () => {
+    const row = { "Payment ID": "p-1", "Invoice Number": "INV-9", Amount: "12.50" };
+    expect(paymentCsvField(row, ["payment_id", "reference"])).toBe("p-1");
+    expect(paymentCsvField(row, ["invoice_number", "invoice"])).toBe("INV-9");
+    expect(paymentCsvField(row, ["amount", "total"])).toBe("12.50");
+  });
+});
 
 describe("cash matching", () => {
   const invoices = [

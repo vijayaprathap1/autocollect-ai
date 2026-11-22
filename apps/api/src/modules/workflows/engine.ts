@@ -462,6 +462,7 @@ export async function runDunningDetailed(now = new Date()): Promise<DunningRunRe
       const batch = await servicePool.query<InvoiceForEngine>(
         `${INVOICE_SELECT}
           WHERE i.status = 'open' AND i.next_step_index < 9999 AND t.status = 'active'
+            AND COALESCE(c.credit_status, 'ok') <> 'hold'
             AND (i.next_step_due_at IS NULL OR i.next_step_due_at <= $1)
             AND EXISTS (
               SELECT 1 FROM workflows w

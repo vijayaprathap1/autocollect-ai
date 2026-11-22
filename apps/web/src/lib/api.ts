@@ -226,6 +226,7 @@ export const stripeConnect = () => api.post<{ url: string }>("/integrations/stri
 export const stripeDisconnect = () => api.post<{ ok: boolean }>("/integrations/stripe/disconnect");
 export const qboConnect = () => api.post<{ url: string }>("/integrations/qbo/connect");
 export const qboSync = () => api.post<{ synced: number; mock: boolean; lastSyncAt: string }>("/integrations/qbo/sync");
+export const qboDisconnect = () => api.post<{ ok: boolean }>("/integrations/qbo/disconnect");
 
 // ─── Customers / invoices ───────────────────────────────────────────────────
 
@@ -268,6 +269,7 @@ export type WorklistItem = {
   brokenPromises: number;
   openTasks: number;
   nextTaskOn: string | null;
+  creditStatus?: string;
 };
 export const getWorklist = () => api.get<{ worklist: WorklistItem[] }>("/worklist");
 
@@ -281,6 +283,9 @@ export type Customer360 = {
     segment: string | null;
     riskScore: number;
     collectorUserId: string | null;
+    creditStatus?: string;
+    creditLimit?: number | null;
+    creditHoldReason?: string | null;
   };
   contacts: { id: string; name: string | null; email: string | null; phone: string | null; role: string; is_primary: boolean }[];
   invoices: { id: string; external_id: string | null; amount_due: number; currency: string; status: string; due_date: string | null; payment_link: string | null }[];
@@ -289,7 +294,7 @@ export type Customer360 = {
   disputes: { id: string; reason_code: string; status: string; summary: string | null; opened_at: string }[];
   promises: { id: string; amount: number; currency: string; promise_date: string; status: string }[];
   tasks: { id: string; title: string; due_on: string | null; status: string; source: string }[];
-  payments: { id: string; external_id: string | null; amount_due: number; currency: string; status: string }[];
+  payments: { id: string; external_id: string | null; amount: number; currency: string; source: string; invoice_external_id: string | null }[];
 };
 export const getCustomer = (id: string) => api.get<Customer360>(`/customers/${id}`);
 export const updateCustomer = (id: string, body: { segment?: string | null; collectorUserId?: string | null }) =>
@@ -341,6 +346,10 @@ export const createTask = (body: { title: string; dueOn?: string; customerId?: s
   api.post("/tasks", body);
 export const updateTask = (id: string, body: { status?: string; ownerUserId?: string | null; dueOn?: string | null }) =>
   api.patch(`/tasks/${id}`, body);
+export const addContact = (customerId: string, body: { name?: string; email?: string; phone?: string; role?: string }) =>
+  api.post(`/customers/${customerId}/contacts`, body);
+export const deleteContact = (customerId: string, contactId: string) => api.del(`/customers/${customerId}/contacts/${contactId}`);
+export const createDispute = (body: { invoiceId: string; reasonCode?: string; summary?: string }) => api.post<{ dispute: { id: string } }>("/disputes", body);
 export const createWorkflow = (body: { name: string; segment?: string | null; minRisk?: number | null; maxRisk?: number | null }) =>
   api.post<{ workflow: WorkflowDto }>("/workflows", body);
 
@@ -592,7 +601,11 @@ export type CashPayment = { id: string; customer_id: string | null; customer_nam
 export const getCashPayments = () => api.get<{ payments: CashPayment[] }>("/cash/payments?unapplied=1");
 export const recordCash = (body: { customerId?: string | null; externalId: string; amount: number; currency?: string; reference?: string }) =>
   api.post<{ payment: { id: string } }>("/cash/payments", body);
-export const cashSuggestions = (id: string) => api.get<{ suggestions: { invoiceId: string; amount: number; method: string; reason: string; confidence: number }[] }>(`/cash/payments/${id}/suggestions`);
+export const cashSuggestions = (id: string) =>
+  api.get<{
+    suggestions: { invoiceId: string; amount: number; method: string; reason: string; confidence: number; externalId?: string | null }[];
+    invoices: { id: string; externalId: string | null; amountDue: number; currency: string }[];
+  }>(`/cash/payments/${id}/suggestions`);
 export const applyCash = (id: string, lines: { invoiceId: string; amount: number }[], acceptSuggestion = false) =>
   api.post(`/cash/payments/${id}/apply`, { lines, acceptSuggestion });
 export const dismissCash = (id: string) => api.post<{ ok: boolean }>(`/cash/payments/${id}/dismiss`);
@@ -604,6 +617,11 @@ export async function importCashCsv(file: File): Promise<{ imported: number; fai
 export const getSavedFilters = () => api.get<{ filters: { id: string; name: string; scope: string; query: Record<string, string> }[] }>("/filters");
 export const saveFilter = (body: { name: string; scope: "invoices" | "worklist" | "cash" | "disputes"; query: Record<string, string> }) =>
   api.post("/filters", body);
+export const deleteFilter = (id: string) => api.del(`/filters/${id}`);
+export type CreditReview = { id: string; customer_id: string; customer_name: string | null; status: string; notes: string | null };
+export const getCreditReviews = () => api.get<{ reviews: CreditReview[] }>("/credit/reviews");
+export const decideCreditReview = (id: string, body: { status: "approved" | "held" | "rejected"; notes?: string }) =>
+  api.post(`/credit/reviews/${id}`, body);
 export const markNotificationRead = (id: string) => api.post(`/notifications/${id}/read`);
 
 export type CreditRow = { id: string; name: string | null; creditLimit: number | null; creditStatus: string; riskScore: number; exposure: number; recommended: string; reason: string | null };
@@ -617,7 +635,13 @@ export const getProcessAnalytics = () =>
   api.get<{ funnel: { bucket: string; count: number; amount: number }[]; collectors: { email: string | null; accounts: number; collected: number }[]; steps: { channel: string; step_index: number; sent: number; engaged: number }[]; bottlenecks: { kind: string; count: number }[] }>("/analytics/process");
 
 export const bulkInvoices = (ids: string[], action: "pause" | "resume") => api.post<{ updated: number }>("/invoices/bulk", { ids, action });
-export const exportInvoicesUrl = (format: "csv" | "xls" = "csv") => apiUrl(`/exports/invoices?format=${format}`);
+export const exportInvoicesUrl = (format: "csv" | "xls" = "csv", filters?: { status?: string; source?: string; q?: string }) => {
+  const params = new URLSearchParams({ format });
+  if (filters?.status && filters.status !== "all") params.set("status", filters.status);
+  if (filters?.source && filters.source !== "all") params.set("source", filters.source);
+  if (filters?.q) params.set("q", filters.q);
+  return apiUrl(`/exports/invoices?${params.toString()}`);
+};
 export const searchWorkspace = (q: string) => api.get<{ customers: { id: string; name: string | null }[]; invoices: { id: string; external_id: string | null }[] }>(`/search?q=${encodeURIComponent(q)}`);
 export const getNotifications = () => api.get<{ notifications: { id: string; title: string; body: string | null; href: string | null; read_at: string | null }[] }>("/notifications");
 

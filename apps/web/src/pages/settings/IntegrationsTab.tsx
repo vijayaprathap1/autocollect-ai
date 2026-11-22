@@ -5,7 +5,7 @@ import { Badge, Button, Card, Spinner } from "@/components/ui";
 import { useConfirmDialog } from "@/components/ConfirmDialog";
 import { Alert } from "@/components/auth";
 import { useToast } from "@/components/Toast";
-import { getIntegrations, importCsv, qboConnect, qboSync, stripeConnect, stripeDisconnect, type CsvImportResult } from "@/lib/api";
+import { getIntegrations, importCsv, qboConnect, qboDisconnect, qboSync, stripeConnect, stripeDisconnect, type CsvImportResult } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 
 function CsvCard() {
@@ -185,9 +185,14 @@ export function IntegrationsTab() {
           </div>
           <div className="flex gap-2">
             {qbo?.status === "active" && (
-              <Button variant="secondary" onClick={syncQbo} disabled={busy !== null}>
-                {busy === "qbo-sync" ? "Syncing…" : "Sync now"}
-              </Button>
+              <>
+                <Button variant="secondary" onClick={syncQbo} disabled={busy !== null}>
+                  {busy === "qbo-sync" ? "Syncing…" : "Sync now"}
+                </Button>
+                <Button variant="secondary" disabled={busy !== null} onClick={() => { setBusy("qbo-off"); qboDisconnect().then(() => { showToast("QuickBooks disconnected", "success"); void queryClient.invalidateQueries({ queryKey: ["integrations"] }); }).catch((e) => showToast((e as Error).message, "error")).finally(() => setBusy(null)); }}>
+                  Disconnect
+                </Button>
+              </>
             )}
             {(!qbo || qbo.status !== "active") && (
               <Button onClick={() => redirect("qbo", qboConnect)} disabled={busy !== null}>
