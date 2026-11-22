@@ -62,10 +62,10 @@ function ToastContainer({ toasts, onClose }: { toasts: Toast[]; onClose: (id: st
 }
 
 const variantStyles: Record<ToastVariant, string> = {
-  default: "bg-slate-900 text-white",
-  success: "bg-green-600 text-white",
-  error: "bg-red-600 text-white",
-  warning: "bg-amber-600 text-white",
+  default: "bg-ink text-bg",
+  success: "bg-success text-white",
+  error: "bg-danger text-white",
+  warning: "bg-warning text-white",
 };
 
 function ToastItem({ toast, onClose }: { toast: Toast; onClose: (id: string) => void }) {

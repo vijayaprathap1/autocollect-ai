@@ -110,7 +110,7 @@ export function OnboardingModal({ isOpen, onClose }: { isOpen: boolean; onClose:
             <span className="font-medium">Setup progress</span>
             <span className="text-muted">{doneCount}/{STEPS.length} steps complete</span>
           </div>
-          <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+          <div className="h-2 rounded-full bg-bg overflow-hidden">
             <div
               className="h-full rounded-full bg-primary transition-all duration-300"
               style={{ width: `${(doneCount / STEPS.length) * 100}%` }}
@@ -150,11 +150,11 @@ export function OnboardingModal({ isOpen, onClose }: { isOpen: boolean; onClose:
         </div>
 
         <div className="mt-4 flex items-center gap-2 text-xs text-muted">
-          <span className="w-3 h-3 rounded-full bg-green-500" />
+          <span className="w-3 h-3 rounded-full bg-success" />
           <span>Done</span>
-          <span className="w-3 h-3 rounded-full bg-amber-500" />
+          <span className="w-3 h-3 rounded-full bg-warning" />
           <span>In progress</span>
-          <span className="w-3 h-3 rounded-full bg-slate-300" />
+          <span className="w-3 h-3 rounded-full bg-line" />
           <span>Pending</span>
         </div>
       </div>

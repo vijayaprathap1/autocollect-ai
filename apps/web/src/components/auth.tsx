@@ -26,10 +26,10 @@ export function AuthLayout({ title, subtitle, children, footer }: { title: strin
 
 export function Alert({ tone = "error", children }: { tone?: "error" | "success" | "info" | "warning"; children: ReactNode }) {
   const styles = {
-    error: "border-red-200 bg-red-50 text-red-800",
-    success: "border-green-200 bg-green-50 text-green-800",
-    info: "border-blue-200 bg-blue-50 text-blue-800",
-    warning: "border-amber-200 bg-amber-50 text-amber-900",
+    error: "border-danger/30 bg-danger/10 text-danger",
+    success: "border-success/30 bg-success/10 text-success",
+    info: "border-primary/25 bg-primary/10 text-primary",
+    warning: "border-warning/40 bg-warning/10 text-warning",
   }[tone];
   return (
     <div role={tone === "error" ? "alert" : "status"} className={cn("rounded-lg border px-3 py-2.5 text-sm", styles)}>
@@ -54,7 +54,7 @@ export function Field({
       </label>
       <Input id={id} aria-invalid={Boolean(error)} aria-describedby={describedBy} {...props} />
       {error ? (
-        <p id={`${id}-error`} className="mt-1 text-xs text-red-700">
+        <p id={`${id}-error`} className="mt-1 text-xs text-danger">
           {error}
         </p>
       ) : hint ? (
@@ -134,7 +134,7 @@ export function PasswordField({
           {visible ? "Hide" : "Show"}
         </button>
       </div>
-      {error && <p className="mt-1 text-xs text-red-700">{error}</p>}
+      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
       {showStrength && value.length > 0 && (
         <div className="mt-2" aria-live="polite">
           <div className="flex gap-1">
@@ -143,7 +143,7 @@ export function PasswordField({
                 key={i}
                 className={cn(
                   "h-1 flex-1 rounded-full",
-                  i < s.score ? (s.score <= 2 ? "bg-amber-400" : "bg-green-500") : "bg-line",
+                  i < s.score ? (s.score <= 2 ? "bg-warning" : "bg-success") : "bg-line",
                 )}
               />
             ))}

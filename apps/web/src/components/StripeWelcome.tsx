@@ -53,7 +53,7 @@ export function StripeWelcome() {
   };
 
   return (
-    <Card className="mb-6 border-[#635BFF]/30 bg-[#635BFF]/5" role="status">
+    <Card className="mb-6 border-primary/25 bg-primary/5" role="status">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-xl">
           <h2 className="text-lg font-semibold text-ink">Your Stripe account is connected</h2>
@@ -66,20 +66,20 @@ export function StripeWelcome() {
             New and paid invoices stay in sync automatically.
           </p>
           {failed > 0 && (
-            <p className="mt-1 text-sm text-amber-700">
+            <p className="mt-1 text-sm text-warning">
               {failed} invoice{failed === 1 ? "" : "s"} couldn't be imported (usually your plan's invoice limit).{" "}
               <Link to="/settings?tab=billing" className="font-medium underline">Upgrade to import the rest</Link>.
             </p>
           )}
           {running ? (
-            <p className="mt-3 text-sm font-medium text-green-700">Reminders are on. AutoCollect will chase overdue invoices for you.</p>
+            <p className="mt-3 text-sm font-medium text-success">Reminders are on. AutoCollect will chase overdue invoices for you.</p>
           ) : (
             <p className="mt-3 text-sm text-ink">
               Last step: approve the default 4-step reminder sequence (before due, on the due date, +7 and +14 days).{" "}
               <Link to="/templates" className="text-primary hover:underline">Review the wording</Link> first if you like.
             </p>
           )}
-          {error && <p className="mt-2 text-sm text-red-700">{error}</p>}
+          {error && <p className="mt-2 text-sm text-danger">{error}</p>}
         </div>
         <div className="flex flex-col items-end gap-2">
           {!running && (

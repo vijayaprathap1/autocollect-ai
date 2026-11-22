@@ -176,7 +176,7 @@ export function Layout() {
 
   return (
     <div className="min-h-screen bg-bg">
-      <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2">
+      <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-surface focus:px-3 focus:py-2">
         Skip to content
       </a>
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-[232px] shrink-0 flex-col border-r border-line bg-surface/80 text-ink backdrop-blur-xl lg:flex">
@@ -219,7 +219,7 @@ export function Layout() {
           </div>
         )}
         {lowCredits && !needsSetup && (
-          <div className="flex flex-wrap items-center gap-3 bg-amber-50 px-4 py-2 text-[12px] text-amber-900 sm:px-7">
+          <div className="flex flex-wrap items-center gap-3 border-b border-warning/30 bg-warning/10 px-4 py-2 text-[12px] text-warning sm:px-7">
             <span>
               {me.tenant!.creditBalance === 0 ? "You're out of reminder credits — reminders are paused." : `Only ${me.tenant!.creditBalance} reminder credits left.`}
             </span>

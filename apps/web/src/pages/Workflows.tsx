@@ -82,7 +82,7 @@ function StepEditor({
               </option>
             ))}
           </select>
-          <button className="text-xs text-red-600 hover:underline" onClick={() => setSteps((s) => s.filter((_, j) => j !== i))} disabled={steps.length <= 1}>
+          <button className="text-xs text-danger hover:underline" onClick={() => setSteps((s) => s.filter((_, j) => j !== i))} disabled={steps.length <= 1}>
             Remove
           </button>
           <p className="text-xs text-muted sm:col-span-4">{stepLabel(step.delayDays)} (negative = before the due date)</p>
@@ -167,7 +167,7 @@ function WorkflowCard({ workflow, templates, smsAvailable, canEdit, gated }: { w
                 <span className="font-medium">{stepLabel(step.delayDays)}</span>
                 <span className="uppercase text-xs text-muted">{step.channel}</span>
                 <span className="min-w-0 truncate text-muted">{templateName(t)}</span>
-                <span className={`ml-auto text-xs ${t?.approved ? "text-green-700" : "text-amber-700"}`}>{t?.approved ? "approved" : "needs approval"}</span>
+                <span className={`ml-auto text-xs ${t?.approved ? "text-success" : "text-warning"}`}>{t?.approved ? "approved" : "needs approval"}</span>
               </li>
             );
           })}
@@ -238,7 +238,7 @@ export function Workflows() {
         }
       />
       {unapproved && (
-        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="mb-6 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
           Nothing is sent until you approve your templates — you stay in control of every word your customers see.
         </div>
       )}

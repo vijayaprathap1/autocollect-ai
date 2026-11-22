@@ -77,7 +77,7 @@ export function Settings() {
     <div>
       <PageHeader title="Settings" subtitle="Workspace, team, billing and integrations." />
       <ReturnBanners />
-      <div className="mb-6 flex gap-1 overflow-x-auto border-b border-slate-200" role="tablist" aria-label="Settings sections">
+      <div className="mb-6 flex gap-1 overflow-x-auto border-b border-line" role="tablist" aria-label="Settings sections">
         {visible.map((t) => (
           <button
             key={t.key}

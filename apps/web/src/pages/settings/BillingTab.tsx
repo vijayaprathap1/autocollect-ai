@@ -74,8 +74,8 @@ export function BillingTab() {
               {data.invoiceLimit ? <span className="text-sm font-normal text-muted"> / {data.invoiceLimit}</span> : null}
             </dd>
             {data.invoiceLimit ? (
-              <div className="mt-1 h-1.5 w-full rounded-full bg-slate-100">
-                <div className={cn("h-1.5 rounded-full", usagePct >= 90 ? "bg-amber-500" : "bg-primary")} style={{ width: `${usagePct}%` }} />
+              <div className="mt-1 h-1.5 w-full rounded-full bg-bg">
+                <div className={cn("h-1.5 rounded-full", usagePct >= 90 ? "bg-warning" : "bg-primary")} style={{ width: `${usagePct}%` }} />
               </div>
             ) : (
               <dd className="text-xs text-muted">Unlimited</dd>
@@ -95,7 +95,7 @@ export function BillingTab() {
         {(data.plans ?? []).map((p) => {
           const current = p.key === data.plan;
           return (
-            <div key={p.key} className={cn("rounded-xl border bg-surface p-5 shadow-sm", current ? "border-primary ring-1 ring-primary" : "border-slate-200")}>
+            <div key={p.key} className={cn("rounded-xl border bg-surface p-5 shadow-sm", current ? "border-primary ring-1 ring-primary" : "border-line")}>
               <div className="flex items-baseline justify-between">
                 <h3 className="font-semibold">{p.name}</h3>
                 <div className="text-lg font-bold">

@@ -130,19 +130,19 @@ function SessionsCard() {
       {isLoading ? (
         <Spinner label="Loading…" />
       ) : (
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-line">
           {(data?.sessions ?? []).map((s) => (
             <li key={s.id} className="flex items-center justify-between py-2 text-sm">
               <div>
                 <div className="font-medium">
-                  {describeUserAgent(s.userAgent)} {s.current && <span className="text-xs text-green-700">· this device</span>}
+                  {describeUserAgent(s.userAgent)} {s.current && <span className="text-xs text-success">· this device</span>}
                 </div>
                 <div className="text-xs text-muted">
                   {s.ip ?? "unknown IP"} · active {timeAgo(s.lastSeenAt ?? s.createdAt)}
                 </div>
               </div>
               {!s.current && (
-                <button className="text-xs text-red-600 hover:underline" onClick={() => act(() => revokeSession(s.id), "Device signed out")}>
+                <button className="text-xs text-danger hover:underline" onClick={() => act(() => revokeSession(s.id), "Device signed out")}>
                   Sign out
                 </button>
               )}
@@ -259,7 +259,7 @@ function TwoFactorCard() {
       {setup && (
         <form onSubmit={confirm} className="grid max-w-md gap-3">
           <p className="text-sm">Add this key to your authenticator app, then enter the 6-digit code.</p>
-          <code className="break-all rounded-md bg-slate-100 px-3 py-2 text-sm">{setup.secret}</code>
+          <code className="break-all rounded-md bg-bg px-3 py-2 text-sm">{setup.secret}</code>
           <Field label="Code" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} required />
           <Button type="submit" disabled={busy || code.trim().length < 6}>
             {busy ? "Checking…" : "Turn on"}
@@ -308,7 +308,7 @@ function DeleteAccountCard() {
 
   return (
     <Card>
-      <h2 className="mb-1 text-lg font-semibold text-red-700">Delete account</h2>
+      <h2 className="mb-1 text-lg font-semibold text-danger">Delete account</h2>
       <p className="mb-3 text-sm text-muted">
         Permanently deletes your login and removes you from every workspace. If you own a workspace, delete it or transfer ownership first.
       </p>

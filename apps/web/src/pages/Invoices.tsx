@@ -80,7 +80,7 @@ export function Invoices() {
       <PageHeader title="Invoices" subtitle="Track what's owed and what's on the way." />
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="flex gap-1 rounded-lg border border-slate-200 bg-surface p-1">
+        <div className="flex gap-1 rounded-lg border border-line bg-surface p-1">
           {FILTERS.map((f) => (
             <button
               key={f.value}
@@ -103,7 +103,7 @@ export function Invoices() {
             setSource(e.target.value);
             setPage(0);
           }}
-          className="rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm"
+          className="rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink"
         >
           <option value="all">All sources</option>
           <option value="stripe">Stripe</option>
@@ -144,7 +144,7 @@ export function Invoices() {
         <Card className="overflow-x-auto p-0">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-muted">
+              <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
                 <th className="px-4 py-3 font-medium">Client</th>
                 <th className="px-4 py-3 font-medium">Amount</th>
                 <th className="px-4 py-3 font-medium">Due</th>
@@ -168,7 +168,7 @@ export function Invoices() {
                       ? formatDate(inv.dueDate)
                       : "—";
                 return (
-                  <tr key={inv.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                  <tr key={inv.id} className="border-b border-line last:border-0 hover:bg-bg">
                     <td className="px-4 py-3">
                       <Link to={`/invoices/${inv.id}`} className="font-medium text-ink hover:text-primary">
                         {inv.customerName ?? "Unknown client"}
@@ -210,7 +210,7 @@ export function Invoices() {
                             href={inv.paymentLink}
                             target="_blank"
                             rel="noreferrer"
-                            className="rounded-md px-2 py-1 text-xs font-medium text-primary hover:bg-blue-50"
+                            className="rounded-md px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
                           >
                             Pay link
                           </a>

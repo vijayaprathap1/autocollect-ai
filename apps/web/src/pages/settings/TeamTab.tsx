@@ -91,7 +91,7 @@ export function TeamTab() {
         {members.isLoading ? (
           <Spinner label="Loading…" />
         ) : (
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-line">
             {(members.data?.members ?? []).map((m) => (
               <li key={m.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
                 <div className="min-w-0">
@@ -106,7 +106,7 @@ export function TeamTab() {
                   {isOwner && !m.isYou ? (
                     <select
                       aria-label={`Role for ${m.email}`}
-                      className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                      className="rounded-lg border border-line bg-surface px-2 py-1 text-xs text-ink"
                       value={m.role}
                       onChange={(e) =>
                         open("Change role", `Make ${m.email} ${e.target.value === "admin" ? "an admin" : `a ${e.target.value}`}?`, run(() => changeMemberRole(m.id, e.target.value as Role), "Role updated"), {
@@ -124,7 +124,7 @@ export function TeamTab() {
                   )}
                   {isAdmin && !m.isYou && (m.role !== "owner" || isOwner) && (
                     <button
-                      className="text-xs text-red-600 hover:underline"
+                      className="text-xs text-danger hover:underline"
                       onClick={() =>
                         open("Remove member", `Remove ${m.email} from ${t.name}? They'll be signed out of this workspace immediately.`, run(() => removeMember(m.id), "Member removed"), {
                           confirmText: "Remove",
@@ -158,7 +158,7 @@ export function TeamTab() {
               <Field label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="teammate@company.com" required error={error} />
               <div>
                 <label className="mb-1 block text-sm font-medium">Role</label>
-                <select className="rounded-lg border border-slate-300 px-3 py-2 text-sm" value={role} onChange={(e) => setRole(e.target.value as "member" | "admin")}>
+                <select className="rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink" value={role} onChange={(e) => setRole(e.target.value as "member" | "admin")}>
                   <option value="member">Member</option>
                   {isOwner && <option value="admin">Admin</option>}
                 </select>
@@ -173,7 +173,7 @@ export function TeamTab() {
           {(invitations.data?.invitations.length ?? 0) > 0 && (
             <>
               <h3 className="mb-1 mt-6 text-xs font-medium uppercase tracking-wider text-muted">Pending invitations</h3>
-              <ul className="divide-y divide-slate-100">
+              <ul className="divide-y divide-line">
                 {invitations.data!.invitations.map((inv) => (
                   <li key={inv.id} className="flex items-center justify-between py-2 text-sm">
                     <div>
@@ -186,7 +186,7 @@ export function TeamTab() {
                       <button className="text-primary hover:underline" onClick={run(() => resendInvitation(inv.id), "Invitation re-sent")}>
                         Resend
                       </button>
-                      <button className="text-red-600 hover:underline" onClick={run(() => revokeInvitation(inv.id), "Invitation revoked")}>
+                      <button className="text-danger hover:underline" onClick={run(() => revokeInvitation(inv.id), "Invitation revoked")}>
                         Revoke
                       </button>
                     </div>

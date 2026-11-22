@@ -70,7 +70,7 @@ export function WorkspaceTab() {
           <div>
             <label className="mb-1 block text-sm font-medium">Default currency</label>
             <select
-              className="w-full rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink"
               value={form.currency}
               onChange={(e) => set("currency", e.target.value)}
               disabled={!canEdit}
@@ -92,7 +92,7 @@ export function WorkspaceTab() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium">Time zone</label>
-            <select className="w-full rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm" value={form.timezone} onChange={(e) => set("timezone", e.target.value)} disabled={!canEdit}>
+            <select className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink" value={form.timezone} onChange={(e) => set("timezone", e.target.value)} disabled={!canEdit}>
               {zones.map((z) => (
                 <option key={z} value={z}>
                   {z.replace(/_/g, " ")}
@@ -107,7 +107,7 @@ export function WorkspaceTab() {
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">Send reminders at</label>
-            <select className="w-full rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm" value={form.sendHour} onChange={(e) => set("sendHour", Number(e.target.value))} disabled={!canEdit}>
+            <select className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink" value={form.sendHour} onChange={(e) => set("sendHour", Number(e.target.value))} disabled={!canEdit}>
               {Array.from({ length: 24 }, (_, h) => (
                 <option key={h} value={h}>
                   {hourLabel(h)}
@@ -117,7 +117,7 @@ export function WorkspaceTab() {
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">Tone</label>
-            <select className="w-full rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm" value={form.tone} onChange={(e) => set("tone", e.target.value as typeof form.tone)} disabled={!canEdit}>
+            <select className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink" value={form.tone} onChange={(e) => set("tone", e.target.value as typeof form.tone)} disabled={!canEdit}>
               <option value="friendly">Friendly</option>
               <option value="professional">Professional</option>
               <option value="firm">Firm</option>
@@ -225,8 +225,8 @@ function WorkspaceDataCard({ name, slug }: { name: string; slug: string }) {
         {exporting ? "Preparing…" : "Export workspace data"}
       </Button>
 
-      <div className="mt-6 border-t border-slate-100 pt-4">
-        <h3 className="font-semibold text-red-700">Delete workspace</h3>
+      <div className="mt-6 border-t border-line pt-4">
+        <h3 className="font-semibold text-danger">Delete workspace</h3>
         <p className="mb-3 text-sm text-muted">
           Permanently deletes this workspace and all of its data, cancels your subscription and disconnects integrations. This can't be undone.
         </p>

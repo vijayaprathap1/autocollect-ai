@@ -44,22 +44,22 @@ export function Card({ className, children }: HTMLAttributes<HTMLDivElement> & {
 }
 
 const badgeTones: Record<string, string> = {
-  open: "bg-blue-50 text-blue-700 border-blue-200",
-  paid: "bg-green-50 text-green-700 border-green-200",
-  overdue: "bg-amber-50 text-amber-700 border-amber-200",
-  paused: "bg-orange-50 text-orange-700 border-orange-200",
-  void: "bg-slate-100 text-slate-600 border-slate-200",
-  uncollectible: "bg-red-50 text-red-700 border-red-200",
-  sent: "bg-blue-50 text-blue-700 border-blue-200",
-  delivered: "bg-slate-100 text-slate-700 border-slate-200",
-  opened: "bg-blue-50 text-blue-700 border-blue-200",
-  clicked: "bg-green-50 text-green-700 border-green-200",
-  bounced: "bg-red-50 text-red-700 border-red-200",
-  failed: "bg-red-50 text-red-700 border-red-200",
-  dispute: "bg-red-50 text-red-700 border-red-200",
-  promise: "bg-green-50 text-green-700 border-green-200",
-  question: "bg-blue-50 text-blue-700 border-blue-200",
-  junk: "bg-slate-100 text-slate-600 border-slate-200",
+  open: "bg-primary/10 text-primary border-primary/20",
+  paid: "bg-success/10 text-success border-success/25",
+  overdue: "bg-warning/15 text-warning border-warning/30",
+  paused: "bg-warning/15 text-warning border-warning/30",
+  void: "bg-bg text-muted border-line",
+  uncollectible: "bg-danger/10 text-danger border-danger/25",
+  sent: "bg-primary/10 text-primary border-primary/20",
+  delivered: "bg-bg text-ink border-line",
+  opened: "bg-primary/10 text-primary border-primary/20",
+  clicked: "bg-success/10 text-success border-success/25",
+  bounced: "bg-danger/10 text-danger border-danger/25",
+  failed: "bg-danger/10 text-danger border-danger/25",
+  dispute: "bg-danger/10 text-danger border-danger/25",
+  promise: "bg-success/10 text-success border-success/25",
+  question: "bg-primary/10 text-primary border-primary/20",
+  junk: "bg-bg text-muted border-line",
 };
 
 export function Badge({ tone, children }: { tone: string; children: ReactNode }) {
@@ -67,7 +67,7 @@ export function Badge({ tone, children }: { tone: string; children: ReactNode })
     <span
       className={cn(
         "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium capitalize",
-        badgeTones[tone] ?? "bg-slate-100 text-slate-600 border-slate-200",
+        badgeTones[tone] ?? "bg-bg text-muted border-line",
       )}
     >
       {children}

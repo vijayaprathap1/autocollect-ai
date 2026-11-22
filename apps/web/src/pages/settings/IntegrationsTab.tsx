@@ -37,7 +37,7 @@ function CsvCard() {
     encodeURIComponent("invoice_number,client_name,client_email,amount,due_date,currency\nINV-1001,Acme Ltd,billing@acme.example,1250.00,2026-10-30,usd\n");
 
   return (
-    <div className="rounded-lg border border-slate-200 p-4">
+    <div className="rounded-lg border border-line p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="font-medium">CSV upload</div>
@@ -49,7 +49,7 @@ function CsvCard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <select aria-label="Date format" className="rounded-md border border-slate-300 px-2 py-2 text-xs" value={dateFormat} onChange={(e) => setDateFormat(e.target.value as "mdy" | "dmy")}>
+          <select aria-label="Date format" className="rounded-lg border border-line bg-surface px-2 py-2 text-xs text-ink" value={dateFormat} onChange={(e) => setDateFormat(e.target.value as "mdy" | "dmy")}>
             <option value="mdy">MM/DD/YYYY</option>
             <option value="dmy">DD/MM/YYYY</option>
           </select>
@@ -60,7 +60,7 @@ function CsvCard() {
         </div>
       </div>
       {result && (
-        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+        <div className="mt-3 rounded-lg border border-line bg-bg p-3 text-sm">
           <div className="font-medium">
             Imported {result.imported} of {result.total} invoices{result.failed > 0 ? ` · ${result.failed} skipped` : ""}
           </div>
@@ -136,7 +136,7 @@ export function IntegrationsTab() {
                 ? `Account ${stripe.accountId}. Open invoices sync automatically and reminders stop the moment one is paid.`
                 : "Import open Stripe invoices and stop reminders automatically when customers pay. Takes 30 seconds."}
             </p>
-            {stripe && stripe.importComplete === false && <p className="mt-1 text-xs text-amber-700">Importing existing invoices in the background…</p>}
+            {stripe && stripe.importComplete === false && <p className="mt-1 text-xs text-warning">Importing existing invoices in the background…</p>}
           </div>
           {stripe ? (
             <Button
