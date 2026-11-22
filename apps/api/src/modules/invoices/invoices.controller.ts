@@ -2,9 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireRole } from "../../plugins/tenant.js";
 import { notFound, badRequest, conflict, assertUuid } from "../../lib/errors.js";
-import { stripe, stripeEnabled } from "../../lib/stripe.js";
-import { isDevLike } from "../../config.js";
 import { sendNowForInvoice } from "../workflows/engine.js";
+import { ensureInvoicePaymentLink } from "../../lib/pay-link.js";
 import { likeContains } from "../../lib/like.js";
 
 type InvoiceRow = {
@@ -168,50 +167,7 @@ export async function invoicesRoutes(app: FastifyInstance) {
   /** Create (or return) a one-click Stripe Payment Link on the connected account. */
   app.post("/invoices/:id/pay-link", { preHandler: requireRole("admin"), config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req) => {
     const id = assertUuid((req.params as { id: string }).id, "Invoice");
-    const row = await req.db.query<{ amount_due: number; currency: string; external_id: string | null; payment_link: string | null; status: string }>(
-      `SELECT amount_due, currency, external_id, payment_link, status FROM invoices WHERE id = $1 AND tenant_id = $2`,
-      [id, req.user.tenantId],
-    );
-    const inv = row.rows[0];
-    if (!inv) throw notFound("Invoice not found");
-    if (inv.payment_link) return { paymentLink: inv.payment_link };
-    if (!["open", "paused"].includes(inv.status)) throw conflict("This invoice is not payable", "INVALID_STATUS");
-    if (Number(inv.amount_due) < 50) throw badRequest("Amount is too small for an online payment", "AMOUNT_TOO_SMALL");
-
-    let link: string;
-    if (stripeEnabled) {
-      const integration = await req.db.query<{ account: string | null }>(
-        `SELECT credentials->>'stripe_account_id' AS account FROM integrations WHERE tenant_id = $1 AND source = 'stripe' AND status = 'active'`,
-        [req.user.tenantId],
-      );
-      const account = integration.rows[0]?.account;
-      if (!account) throw badRequest("Connect Stripe first to create payment links", "STRIPE_NOT_CONNECTED");
-      const pl = await stripe!.paymentLinks.create(
-        {
-          line_items: [
-            {
-              price_data: {
-                currency: inv.currency,
-                product_data: { name: inv.external_id ? `Invoice ${inv.external_id}` : "Invoice payment" },
-                unit_amount: Number(inv.amount_due),
-              },
-              quantity: 1,
-            },
-          ],
-          // Lets the connected-account checkout.session.completed webhook close this invoice.
-          metadata: { autocollect_invoice_id: id, autocollect_tenant_id: req.user.tenantId },
-          payment_intent_data: { metadata: { autocollect_invoice_id: id } },
-          restrictions: { completed_sessions: { limit: 1 } },
-        },
-        { stripeAccount: account, idempotencyKey: `paylink:${id}` },
-      );
-      link = pl.url;
-    } else {
-      if (!isDevLike) throw badRequest("Payments are not configured on this server", "STRIPE_NOT_CONFIGURED");
-      link = `https://pay.stripe.com/dev-pay-${id.slice(0, 8)}`;
-    }
-
-    await req.db.query(`UPDATE invoices SET payment_link = $2, updated_at = now() WHERE id = $1 AND tenant_id = $3`, [id, link, req.user.tenantId]);
+    const link = await ensureInvoicePaymentLink(req.user.tenantId, id, { strict: true });
     return { paymentLink: link };
   });
 }

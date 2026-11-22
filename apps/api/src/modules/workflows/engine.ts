@@ -12,6 +12,8 @@ import { replyAddressFor } from "../../lib/reply-address.js";
 import { buildSmsBody, isSmsOptOutError } from "../../lib/sms-body.js";
 import { config } from "../../config.js";
 import type { WorkflowStep } from "@autocollect/shared";
+import { ensureInvoicePaymentLink } from "../../lib/pay-link.js";
+import { pickStrategy } from "../../lib/risk.js";
 
 /**
  * Dunning engine.
@@ -45,6 +47,9 @@ type InvoiceForEngine = {
   customer_email: string | null;
   customer_phone: string | null;
   customer_sms_opt_out: boolean | null;
+  customer_segment: string | null;
+  customer_risk: number;
+  strategy_locked: boolean;
   tenant_name: string;
   tone: string;
   timezone: string;
@@ -54,7 +59,16 @@ type InvoiceForEngine = {
   business_address: string | null;
 };
 
-type WorkflowRow = { id: string; enabled: boolean; steps: WorkflowStep[] };
+type WorkflowRow = {
+  id: string;
+  enabled: boolean;
+  steps: WorkflowStep[];
+  is_default: boolean;
+  segment: string | null;
+  min_risk: number | null;
+  max_risk: number | null;
+  priority: number;
+};
 type TemplateRow = { id: string; subject: string; body: string; approved: boolean };
 
 export type ProcessResult = "sent" | "advanced" | "waiting" | "skipped" | "failed" | "noop";
@@ -70,7 +84,8 @@ const INVOICE_SELECT = `
          COALESCE(i.due_date, i.issue_date, i.created_at::date)::text AS anchor_date,
          i.external_id, i.next_step_index, i.next_step_due_at, i.snoozed_until, i.workflow_id,
          c.id AS customer_id, c.name AS customer_name, c.email AS customer_email, c.phone AS customer_phone,
-         c.sms_opt_out AS customer_sms_opt_out,
+         c.sms_opt_out AS customer_sms_opt_out, c.segment AS customer_segment, COALESCE(c.risk_score, 0) AS customer_risk,
+         i.strategy_locked,
          t.name AS tenant_name, t.tone, t.timezone, t.send_hour, t.skip_weekends,
          COALESCE((t.branding->>'hideBranding')::boolean, FALSE) AS hide_branding,
          t.branding->>'businessAddress' AS business_address
@@ -81,24 +96,35 @@ const INVOICE_SELECT = `
 
 /** Per-run caches so a batch doesn't re-read the same workflow/template N times. */
 class RunContext {
-  private workflows = new Map<string, Promise<WorkflowRow | null>>();
+  private workflows = new Map<string, Promise<WorkflowRow[]>>();
   private templates = new Map<string, Promise<TemplateRow | null>>();
 
-  workflow(inv: InvoiceForEngine): Promise<WorkflowRow | null> {
-    const key = `${inv.tenant_id}:${inv.workflow_id ?? "default"}`;
-    let p = this.workflows.get(key);
+  async workflow(inv: InvoiceForEngine): Promise<WorkflowRow | null> {
+    let p = this.workflows.get(inv.tenant_id);
     if (!p) {
-      p = (
-        inv.workflow_id
-          ? servicePool.query<WorkflowRow>(`SELECT id, enabled, steps FROM workflows WHERE id = $1 AND tenant_id = $2`, [inv.workflow_id, inv.tenant_id])
-          : servicePool.query<WorkflowRow>(
-              `SELECT id, enabled, steps FROM workflows WHERE tenant_id = $1 AND is_default = TRUE ORDER BY created_at LIMIT 1`,
-              [inv.tenant_id],
-            )
-      ).then((r) => r.rows[0] ?? null);
-      this.workflows.set(key, p);
+      p = servicePool
+        .query<WorkflowRow>(
+          `SELECT id, enabled, steps, is_default, segment, min_risk, max_risk, priority
+             FROM workflows WHERE tenant_id = $1`,
+          [inv.tenant_id],
+        )
+        .then((r) => r.rows);
+      this.workflows.set(inv.tenant_id, p);
     }
-    return p;
+    const all = await p;
+    const toCandidate = (w: WorkflowRow) => ({
+      id: w.id,
+      enabled: w.enabled,
+      isDefault: w.is_default,
+      segment: w.segment,
+      minRisk: w.min_risk,
+      maxRisk: w.max_risk,
+      priority: w.priority,
+    });
+    const explicitRow = inv.workflow_id ? all.find((w) => w.id === inv.workflow_id) ?? null : null;
+    const explicit = explicitRow && (inv.strategy_locked || !explicitRow.is_default) ? toCandidate(explicitRow) : null;
+    const picked = pickStrategy(all.map(toCandidate), { segment: inv.customer_segment, risk: Number(inv.customer_risk) || 0 }, explicit);
+    return picked ? all.find((w) => w.id === picked.id) ?? null : null;
   }
 
   template(tenantId: string, templateId: string | null): Promise<TemplateRow | null> {
@@ -241,6 +267,10 @@ async function processOne(inv: InvoiceForEngine, now: Date, force: boolean, ctx:
     const reason = channel === "sms" ? (inv.customer_sms_opt_out ? "sms_opt_out" : "no_phone") : "no_email";
     await skipStep(inv, steps, index, reason, channel);
     return "skipped";
+  }
+
+  if (!inv.payment_link) {
+    inv.payment_link = await ensureInvoicePaymentLink(inv.tenant_id, inv.id).catch(() => null);
   }
 
   const rendered = renderTemplate(template, {
@@ -436,7 +466,6 @@ export async function runDunningDetailed(now = new Date()): Promise<DunningRunRe
             AND EXISTS (
               SELECT 1 FROM workflows w
                WHERE w.tenant_id = i.tenant_id AND w.enabled
-                 AND (w.id = i.workflow_id OR (i.workflow_id IS NULL AND w.is_default))
             )
           ORDER BY i.next_step_due_at NULLS FIRST, i.id
           LIMIT $2`,

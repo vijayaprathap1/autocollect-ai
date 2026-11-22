@@ -6,6 +6,8 @@ import { invoiceIdFromMailboxHash } from "../../lib/reply-address.js";
 import { sendEmail } from "../../lib/postmark.js";
 import { replyNotificationEmail } from "../../lib/email-templates.js";
 import { config } from "../../config.js";
+import { openDisputeFromReply, recordPromiseFromReply } from "../../lib/collections.js";
+import { captureException } from "../../lib/observability.js";
 
 export type PostmarkInboundPayload = {
   MessageID?: string;
@@ -134,11 +136,13 @@ export async function processInboundEmail(payload: PostmarkInboundPayload): Prom
       invoiceNumber: inv?.external_id ?? null,
     }).catch(() => null);
 
-    await servicePool.query(
+    const reply = await servicePool.query<{ id: string }>(
       `INSERT INTO replies (tenant_id, invoice_id, channel, content, classification, promise_date, suggested_body)
-       VALUES ($1, $2, 'email', $3, $4, $5, $6)`,
+       VALUES ($1, $2, 'email', $3, $4, $5, $6)
+       RETURNING id`,
       [resolved.tenant_id, resolved.invoice_id, content.slice(0, 5000), classification.classification, classification.promiseDate, suggestion?.body ?? null],
     );
+    const replyId = reply.rows[0]?.id;
     await servicePool.query(`INSERT INTO audit_log (tenant_id, actor, action, detail) VALUES ($1, $2, 'reply_received', $3::jsonb)`, [
       resolved.tenant_id,
       from.Email ?? "customer",
@@ -152,6 +156,14 @@ export async function processInboundEmail(payload: PostmarkInboundPayload): Prom
 
     if (classification.classification === "dispute") {
       await servicePool.query(`UPDATE invoices SET status = 'paused', updated_at = now() WHERE id = $1 AND status = 'open'`, [resolved.invoice_id]);
+      if (replyId) {
+        await openDisputeFromReply(servicePool, {
+          tenantId: resolved.tenant_id,
+          invoiceId: resolved.invoice_id,
+          replyId,
+          text: content,
+        }).catch((err) => captureException(err, { invoiceId: resolved.invoice_id, action: "open_dispute" }));
+      }
     } else if (classification.classification === "promise" && classification.promiseDate) {
       // Stay quiet until the day after the promised date, then resume if still unpaid.
       await servicePool.query(
@@ -159,6 +171,16 @@ export async function processInboundEmail(payload: PostmarkInboundPayload): Prom
           WHERE id = $1 AND status = 'open'`,
         [resolved.invoice_id, classification.promiseDate],
       );
+      if (replyId && inv) {
+        await recordPromiseFromReply(servicePool, {
+          tenantId: resolved.tenant_id,
+          invoiceId: resolved.invoice_id,
+          replyId,
+          promiseDate: classification.promiseDate,
+          amount: Number(inv.amount_due),
+          currency: inv.currency,
+        }).catch((err) => captureException(err, { invoiceId: resolved.invoice_id, action: "record_promise" }));
+      }
     }
 
     await notifyTeam(resolved.tenant_id, resolved.invoice_id, classification.classification, content, from.Name ?? null).catch(() => {});

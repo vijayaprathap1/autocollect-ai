@@ -10,7 +10,10 @@ import { useToast } from "@/components/Toast";
 const navItems = [
   { to: "/dashboard", label: "Dashboard" },
   { to: "/invoices", label: "Invoices" },
+  { to: "/worklist", label: "Worklist" },
   { to: "/customers", label: "Customers" },
+  { to: "/disputes", label: "Disputes" },
+  { to: "/promises", label: "Promises" },
   { to: "/workflows", label: "Workflows" },
   { to: "/templates", label: "Templates" },
   { to: "/replies", label: "Replies" },

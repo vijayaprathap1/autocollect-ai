@@ -74,7 +74,9 @@ export function Customers() {
               {customers.map((c) => (
                 <tr key={c.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                   <td className="px-4 py-3">
-                    <div className="font-medium">{c.name ?? "Unknown customer"}</div>
+                    <Link to={`/customers/${c.id}`} className="font-medium text-primary hover:underline">
+                      {c.name ?? "Unknown customer"}
+                    </Link>
                     {c.email && <div className="text-xs text-muted">{c.email}</div>}
                   </td>
                   <td className="px-4 py-3">{c.openCount}</td>

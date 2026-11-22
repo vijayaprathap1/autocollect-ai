@@ -1,0 +1,1 @@
+ALTER TABLE disputes DROP COLUMN IF EXISTS created_at;
