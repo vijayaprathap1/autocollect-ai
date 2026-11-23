@@ -142,8 +142,9 @@ export const regenerateRecoveryCodes = (code: string) =>
   api.post<{ ok: boolean; recoveryCodes: string[] }>("/auth/2fa/recovery", { code });
 export const adminLogin = (email: string, password: string) => api.post<LoginResult>("/auth/admin/login", { email, password });
 export const signup = (body: { name: string; email: string; password: string; organizationName?: string; timezone?: string }) =>
-  api.post<{ ok: boolean; message: string }>("/auth/signup", body);
-export const resendVerification = (email: string) => api.post<{ ok: boolean; message: string }>("/auth/resend-verification", { email });
+  api.post<{ ok: boolean; message: string; devVerifyUrl?: string }>("/auth/signup", body);
+export const resendVerification = (email: string) =>
+  api.post<{ ok: boolean; message: string; devVerifyUrl?: string }>("/auth/resend-verification", { email });
 export const verifyEmail = (token: string) => api.post<{ ok: boolean; signedIn: boolean }>("/auth/verify-email", { token });
 export const forgotPassword = (email: string) => api.post<{ ok: boolean; message: string }>("/auth/forgot-password", { email });
 export const resetPassword = (token: string, password: string) => api.post<{ ok: boolean; message: string }>("/auth/reset-password", { token, password });
