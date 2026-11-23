@@ -13,6 +13,8 @@ export function SignUp() {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [resent, setResent] = useState(false);
+  // Only returned by a dev API with no real email provider configured.
+  const [devVerifyUrl, setDevVerifyUrl] = useState<string | null>(null);
 
   const pwIssues = passwordIssues(password);
 
@@ -25,13 +27,14 @@ export function SignUp() {
     setError(null);
     setLoading(true);
     try {
-      await signup({
+      const res = await signup({
         name: name.trim(),
         email: email.trim(),
         password,
         organizationName: organizationName.trim() || undefined,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
+      setDevVerifyUrl(res.devVerifyUrl ?? null);
       setSent(true);
     } catch (err) {
       setError((err as Error).message ?? "Sign-up failed");
@@ -49,6 +52,15 @@ export function SignUp() {
             expires in 24 hours.
           </p>
           <p>Can't find it? Check your spam folder.</p>
+          {devVerifyUrl && (
+            <Alert tone="info">
+              Development mode: no email provider is configured, so the email was only logged to the API console.{" "}
+              <a href={devVerifyUrl} className="font-medium underline">
+                Open the confirmation link
+              </a>
+              .
+            </Alert>
+          )}
           {resent ? (
             <Alert tone="success">A new link is on its way.</Alert>
           ) : (
@@ -56,7 +68,8 @@ export function SignUp() {
               variant="secondary"
               className="w-full"
               onClick={async () => {
-                await resendVerification(email).catch(() => undefined);
+                const res = await resendVerification(email).catch(() => undefined);
+                if (res?.devVerifyUrl) setDevVerifyUrl(res.devVerifyUrl);
                 setResent(true);
               }}
             >

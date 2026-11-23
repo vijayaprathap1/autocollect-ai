@@ -18,6 +18,8 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   const [challenge, setChallenge] = useState(params.get("mfa") ?? "");
   const [code, setCode] = useState("");
+  // Only returned by a dev API with no real email provider configured.
+  const [devVerifyUrl, setDevVerifyUrl] = useState<string | null>(null);
 
   function goNext() {
     const next = params.get("next");
@@ -63,6 +65,7 @@ export function Login() {
     try {
       const r = await resendVerification(email.trim());
       setNotice(r.message);
+      setDevVerifyUrl(r.devVerifyUrl ?? null);
       setError(null);
       setNeedsVerification(false);
     } catch (err) {
@@ -93,6 +96,15 @@ export function Login() {
           </Alert>
         )}
         {notice && <Alert tone="success">{notice}</Alert>}
+        {devVerifyUrl && (
+          <Alert tone="info">
+            Development mode: no email provider is configured.{" "}
+            <a href={devVerifyUrl} className="font-medium underline">
+              Open the confirmation link
+            </a>
+            .
+          </Alert>
+        )}
         {challenge ? (
           <Field
             label="Authentication code"

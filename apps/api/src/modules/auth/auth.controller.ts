@@ -38,6 +38,14 @@ import { stripeLoginEnabled, stripeLoginRoutes } from "./stripe-login.controller
 import { createTwoFactorChallenge } from "../../lib/two-factor.js";
 
 import { issueVerificationToken, sendAccountEmail } from "../../lib/account-emails.js";
+import { postmarkEnabled } from "../../lib/postmark.js";
+
+/**
+ * Dev only: with no real email provider the message is just logged to the API
+ * console, so hand the link back to the UI too. Never in production.
+ */
+const exposeDevLinks = isDevLike && !postmarkEnabled;
+const devLink = (url: string) => (exposeDevLinks ? { devVerifyUrl: url } : {});
 
 async function issueResetToken(userId: string, ttlMinutes = config.resetTokenTtlMinutes): Promise<string> {
   const raw = generateToken();
@@ -141,7 +149,9 @@ export async function authRoutes(app: FastifyInstance) {
           displayName,
         ]);
         const token = await issueVerificationToken(existing.id);
-        await sendAccountEmail(req, input.email, emailVerificationEmail(webUrl(`/verify-email?token=${token}`), displayName), "email-verification");
+        const url = webUrl(`/verify-email?token=${token}`);
+        await sendAccountEmail(req, input.email, emailVerificationEmail(url, displayName), "email-verification");
+        return reply.status(202).send({ ok: true, message: "Check your inbox to confirm your email address.", ...devLink(url) });
       } else {
         await sendAccountEmail(req, input.email, accountExistsEmail(webUrl("/login"), webUrl("/forgot-password")), "account-exists");
       }
@@ -167,10 +177,13 @@ export async function authRoutes(app: FastifyInstance) {
       return true;
     });
 
+    const url = webUrl(`/verify-email?token=${rawToken}`);
     if (created) {
-      await sendAccountEmail(req, input.email, emailVerificationEmail(webUrl(`/verify-email?token=${rawToken}`), displayName), "email-verification");
+      await sendAccountEmail(req, input.email, emailVerificationEmail(url, displayName), "email-verification");
     }
-    return reply.status(202).send({ ok: true, message: "Check your inbox to confirm your email address." });
+    return reply
+      .status(202)
+      .send({ ok: true, message: "Check your inbox to confirm your email address.", ...(created ? devLink(url) : {}) });
   });
 
   // ─── POST /auth/resend-verification ──────────────────────────────────
@@ -179,7 +192,9 @@ export async function authRoutes(app: FastifyInstance) {
     const user = await findUserByEmail(servicePool, email);
     if (user && user.status === "pending" && !user.email_verified_at) {
       const token = await issueVerificationToken(user.id);
-      await sendAccountEmail(req, user.email, emailVerificationEmail(webUrl(`/verify-email?token=${token}`), user.display_name || user.email), "email-verification");
+      const url = webUrl(`/verify-email?token=${token}`);
+      await sendAccountEmail(req, user.email, emailVerificationEmail(url, user.display_name || user.email), "email-verification");
+      return { ok: true, message: "If that account is awaiting verification, a new link is on its way.", ...devLink(url) };
     }
     return { ok: true, message: "If that account is awaiting verification, a new link is on its way." };
   });
