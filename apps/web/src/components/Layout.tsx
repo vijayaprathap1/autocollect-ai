@@ -260,7 +260,13 @@ export function Layout() {
     if (!mobileNavOpen) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMobileNavOpen(false);
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    // Keep the page behind the drawer from scrolling while it is open.
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousOverflow;
+    };
   }, [mobileNavOpen]);
 
   return (

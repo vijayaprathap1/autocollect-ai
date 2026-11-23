@@ -19,8 +19,8 @@ export default {
         ink: "rgb(var(--ink) / <alpha-value>)",
         muted: "rgb(var(--muted) / <alpha-value>)",
         // Marketing site
-        paper: "#FAF8F3",
-        navy: "#0B1730",
+        paper: "#F8FAFC",
+        navy: "#0B1A33",
       },
       borderRadius: {
         DEFAULT: "12px",
@@ -34,7 +34,7 @@ export default {
       animation: { rise: "rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both" },
       fontFamily: {
         sans: ["-apple-system", "BlinkMacSystemFont", "SF Pro Text", "Segoe UI", "system-ui", "sans-serif"],
-        display: ["Fraunces Variable", "Georgia", "Cambria", "Times New Roman", "serif"],
+        display: ["Inter Variable", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "system-ui", "sans-serif"],
       },
     },
   },
