@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Badge, Button, Card, EmptyState, Input, PageHeader, Pagination, Spinner, useToast } from "@/components/ui";
 import { useConfirmDialog } from "@/components/ConfirmDialog";
-import { bulkInvoices, exportInvoicesUrl, getInvoices, invoiceAction, saveFilter, type InvoiceDto } from "@/lib/api";
+import { bulkInvoices, deleteFilter, exportInvoicesUrl, getInvoices, getSavedFilters, invoiceAction, saveFilter, type InvoiceDto } from "@/lib/api";
 import { daysUntil, formatDate, formatMoney } from "@/lib/format";
 import { useMe } from "@/lib/me";
 
@@ -32,6 +32,7 @@ export function Invoices() {
   const statusParam = filter === "all" ? undefined : filter;
   const sourceParam = source === "all" ? undefined : source;
 
+  const saved = useQuery({ queryKey: ["saved-filters"], queryFn: getSavedFilters });
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ["invoices", statusParam, sourceParam, q, page],
     queryFn: () => getInvoices({ status: statusParam, source: sourceParam, q: q || undefined, limit: pageSize, offset: page * pageSize }),
@@ -85,12 +86,17 @@ export function Invoices() {
         actions={
           <span className="flex gap-2">
             {selected.length > 0 && (
-              <Button type="button" variant="secondary" onClick={() => bulkInvoices(selected, "pause").then((r) => { showToast(`Paused ${r.updated}`, "success"); setSelected([]); void refetch(); }).catch((e) => showToast((e as Error).message, "error"))}>
-                Pause selected
-              </Button>
+              <>
+                <Button type="button" variant="secondary" onClick={() => bulkInvoices(selected, "pause").then((r) => { showToast(`Paused ${r.updated}`, "success"); setSelected([]); void refetch(); }).catch((e) => showToast((e as Error).message, "error"))}>
+                  Pause selected
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => bulkInvoices(selected, "resume").then((r) => { showToast(`Resumed ${r.updated}`, "success"); setSelected([]); void refetch(); }).catch((e) => showToast((e as Error).message, "error"))}>
+                  Resume selected
+                </Button>
+              </>
             )}
-            <a className="rounded-full border border-line px-4 py-2 text-sm" href={exportInvoicesUrl("csv")}>CSV</a>
-            <a className="rounded-full border border-line px-4 py-2 text-sm" href={exportInvoicesUrl("xls")}>Excel</a>
+            <a className="rounded-full border border-line px-4 py-2 text-sm" href={exportInvoicesUrl("csv", { status: filter, source, q })}>CSV</a>
+            <a className="rounded-full border border-line px-4 py-2 text-sm" href={exportInvoicesUrl("xls", { status: filter, source, q })}>Excel</a>
           </span>
         }
       />
@@ -113,10 +119,16 @@ export function Invoices() {
             </button>
           ))}
         </div>
-        <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (!filterName.trim()) return; saveFilter({ name: filterName.trim(), scope: "invoices", query: { status: filter, source, q } }).then(() => { setFilterName(""); showToast("View saved", "success"); }).catch((err) => showToast((err as Error).message, "error")); }}>
+        <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (!filterName.trim()) return; saveFilter({ name: filterName.trim(), scope: "invoices", query: { status: filter, source, q } }).then(() => { setFilterName(""); showToast("View saved", "success"); void saved.refetch(); }).catch((err) => showToast((err as Error).message, "error")); }}>
           <Input aria-label="Saved view name" value={filterName} onChange={(e) => setFilterName(e.target.value)} placeholder="Save this view" />
           <Button type="submit" variant="secondary" disabled={!filterName.trim()}>Save</Button>
         </form>
+        {(saved.data?.filters ?? []).filter((f) => f.scope === "invoices").map((f) => (
+          <span key={f.id} className="inline-flex items-center gap-1 rounded-full border border-line px-3 py-1 text-sm">
+            <button type="button" onClick={() => { const query = f.query ?? {}; if (query.status) setFilter(query.status as Filter); if (query.source) setSource(query.source); setQ(query.q ?? ""); setPage(0); }}>{f.name}</button>
+            <button type="button" aria-label={`Delete view ${f.name}`} className="text-muted" onClick={() => deleteFilter(f.id).then(() => saved.refetch()).catch((err) => showToast((err as Error).message, "error"))}>×</button>
+          </span>
+        ))}
         <select
           value={source}
           onChange={(e) => {

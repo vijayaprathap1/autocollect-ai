@@ -4,6 +4,7 @@ import { requireRole } from "../../plugins/tenant.js";
 import { notFound, badRequest, conflict, assertUuid } from "../../lib/errors.js";
 import { sendNowForInvoice } from "../workflows/engine.js";
 import { ensureInvoicePaymentLink } from "../../lib/pay-link.js";
+import { bookSettledReceipt } from "../../lib/cash-ledger.js";
 import { likeContains } from "../../lib/like.js";
 
 type InvoiceRow = {
@@ -130,7 +131,10 @@ export async function invoicesRoutes(app: FastifyInstance) {
       .object({ action: z.enum(["pause", "resume", "mark_paid", "mark_uncollectible", "reopen", "send_now"]) })
       .parse(req.body ?? {});
 
-    const row = await req.db.query<{ status: string }>(`SELECT status FROM invoices WHERE id = $1 AND tenant_id = $2`, [id, req.user.tenantId]);
+    const row = await req.db.query<{ status: string; amount_due: number; currency: string; customer_id: string | null }>(
+      `SELECT status, amount_due, currency, customer_id FROM invoices WHERE id = $1 AND tenant_id = $2`,
+      [id, req.user.tenantId],
+    );
     const current = row.rows[0];
     if (!current) throw notFound("Invoice not found");
 
@@ -143,6 +147,18 @@ export async function invoicesRoutes(app: FastifyInstance) {
     const t = TRANSITIONS[action];
     if (!t.from.includes(current.status)) {
       throw conflict(`Can't ${action.replace("_", " ")} an invoice that is ${current.status}`, "INVALID_STATUS");
+    }
+    if (action === "mark_paid" && Number(current.amount_due) > 0) {
+      await bookSettledReceipt(req.db, {
+        tenantId: req.user.tenantId,
+        customerId: current.customer_id,
+        source: "manual",
+        externalId: `mark-paid:${id}:${current.amount_due}`,
+        amount: Number(current.amount_due),
+        currency: (current.currency || "usd").toLowerCase(),
+        invoiceId: id,
+        reference: "Marked paid",
+      });
     }
     await req.db.query(
       `UPDATE invoices

@@ -19,9 +19,12 @@ export async function ensureInvoicePaymentLink(
     external_id: string | null;
     payment_link: string | null;
     status: string;
+    credit_status: string | null;
   }>(
-    `SELECT amount_due, currency, external_id, payment_link, status
-       FROM invoices WHERE id = $1 AND tenant_id = $2`,
+    `SELECT i.amount_due, i.currency, i.external_id, i.payment_link, i.status, c.credit_status
+       FROM invoices i
+       LEFT JOIN customers c ON c.id = i.customer_id
+      WHERE i.id = $1 AND i.tenant_id = $2`,
     [invoiceId, tenantId],
   );
   const inv = row.rows[0];
@@ -30,6 +33,10 @@ export async function ensureInvoicePaymentLink(
     return null;
   }
   if (inv.payment_link) return inv.payment_link;
+  if (inv.credit_status === "hold") {
+    if (opts.strict) throw conflict("This customer is on credit hold, so a new payment link is not created", "CREDIT_HOLD");
+    return null;
+  }
   if (!["open", "paused"].includes(inv.status)) {
     if (opts.strict) throw conflict("This invoice is not payable", "INVALID_STATUS");
     return null;
@@ -74,7 +81,7 @@ export async function ensureInvoicePaymentLink(
         payment_intent_data: { metadata: { autocollect_invoice_id: invoiceId } },
         restrictions: { completed_sessions: { limit: 1 } },
       },
-      { stripeAccount: account, idempotencyKey: `paylink:${invoiceId}` },
+      { stripeAccount: account, idempotencyKey: `paylink:${invoiceId}:${inv.amount_due}` },
     );
     link = pl.url;
     stripeId = pl.id;
@@ -88,4 +95,19 @@ export async function ensureInvoicePaymentLink(
     [invoiceId, link, stripeId, tenantId],
   );
   return link;
+}
+
+/** Best-effort: turn off a Stripe Payment Link whose amount is no longer the balance. */
+export async function deactivateStripePaymentLinks(tenantId: string, linkIds: string[]): Promise<void> {
+  if (!stripeEnabled || !stripe || !linkIds.length) return;
+  const integration = await servicePool.query<{ account: string | null }>(
+    `SELECT credentials->>'stripe_account_id' AS account
+       FROM integrations WHERE tenant_id = $1 AND source = 'stripe' AND status = 'active'`,
+    [tenantId],
+  );
+  const account = integration.rows[0]?.account;
+  if (!account) return;
+  for (const id of linkIds) {
+    await stripe.paymentLinks.update(id, { active: false }, { stripeAccount: account }).catch(() => {});
+  }
 }

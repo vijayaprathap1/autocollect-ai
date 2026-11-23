@@ -4,7 +4,8 @@ import { z } from "zod";
 import { requireRole } from "../../plugins/tenant.js";
 import { assertUuid, badRequest } from "../../lib/errors.js";
 import { toCents } from "../integrations/csv.controller.js";
-import { applyCash, bookSettledReceipt, recordPayment, suggestionsForPayment } from "../../lib/cash-ledger.js";
+import { applyCash, bookSettledReceipt, openInvoicesFor, recordPayment, suggestionsForPayment } from "../../lib/cash-ledger.js";
+import { paymentCsvField } from "../../lib/payment-csv.js";
 import { creditStanding } from "../../lib/credit.js";
 import { forecastCollections } from "../../lib/forecast.js";
 
@@ -70,17 +71,22 @@ export async function enterpriseRoutes(app: FastifyInstance) {
         source: z.enum(["qbo", "csv", "manual"]).default("manual"),
         externalId: z.string().trim().min(1).max(120),
         amount: z.number().int().positive(),
-        currency: z.string().trim().length(3).default("usd"),
+        currency: z.string().trim().length(3).optional(),
         reference: z.string().trim().max(200).optional(),
       })
       .parse(req.body ?? {});
+    const tenantCurrency = body.currency
+      ? body.currency.toLowerCase()
+      : (
+          await req.db.query<{ currency: string }>(`SELECT currency FROM tenants WHERE id = $1`, [req.user.tenantId])
+        ).rows[0]?.currency?.toLowerCase() ?? "usd";
     const payment = await recordPayment(req.db, {
       tenantId: req.user.tenantId,
       customerId: body.customerId ?? null,
       source: body.source,
       externalId: body.externalId,
       amount: body.amount,
-      currency: body.currency.toLowerCase(),
+      currency: tenantCurrency,
       reference: body.reference ?? null,
     });
     await req.db.query(`INSERT INTO audit_log (tenant_id, actor, action, detail) VALUES ($1, $2, 'payment_recorded', $3::jsonb)`, [
@@ -93,7 +99,24 @@ export async function enterpriseRoutes(app: FastifyInstance) {
 
   app.get("/cash/payments/:id/suggestions", async (req) => {
     const id = assertUuid((req.params as { id: string }).id, "Payment");
-    return { suggestions: await suggestionsForPayment(req.db, req.user.tenantId, id) };
+    const payment = await req.db.query<{ customer_id: string | null; currency: string }>(
+      `SELECT customer_id, currency FROM payments WHERE id = $1 AND tenant_id = $2`,
+      [id, req.user.tenantId],
+    );
+    const suggestions = await suggestionsForPayment(req.db, req.user.tenantId, id);
+    const open = await openInvoicesFor(req.db, req.user.tenantId, payment.rows[0]?.customer_id ?? null);
+    return {
+      suggestions: suggestions.map((line) => ({
+        ...line,
+        externalId: open.find((inv) => inv.id === line.invoiceId)?.externalId ?? null,
+      })),
+      invoices: open.map((inv) => ({
+        id: inv.id,
+        externalId: inv.externalId,
+        amountDue: inv.amountDue,
+        currency: payment.rows[0]?.currency ?? "usd",
+      })),
+    };
   });
 
   app.post("/cash/payments/:id/apply", { preHandler: writer, config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (req) => {
@@ -149,17 +172,22 @@ export async function enterpriseRoutes(app: FastifyInstance) {
     if (records.length > 2000) throw badRequest("Import up to 2000 payment rows at a time");
     let imported = 0;
     const errors: { row: number; error: string }[] = [];
+    const workspaceCurrency = (
+      await req.db.query<{ currency: string }>(`SELECT currency FROM tenants WHERE id = $1`, [req.user.tenantId])
+    ).rows[0]?.currency?.toLowerCase() ?? "usd";
     await req.db.query("BEGIN");
     try {
       for (let i = 0; i < records.length; i++) {
         const row = records[i];
-        const amount = toCents(row.amount ?? row.Amount);
-        const externalId = (row.payment_id ?? row.reference ?? row.external_id ?? "").trim();
+        const amount = toCents(paymentCsvField(row, ["amount", "payment_amount", "total", "amt", "paid"]));
+        const externalId = paymentCsvField(row, ["payment_id", "reference", "external_id", "receipt", "id"]);
         if (!amount || !externalId) {
           errors.push({ row: i + 2, error: "Each row needs amount and payment_id (or reference)" });
           continue;
         }
-        const invoiceNumber = (row.invoice_number ?? row.invoice ?? "").trim();
+        const invoiceNumber = paymentCsvField(row, ["invoice_number", "invoice_no", "invoice", "invoice_id"]);
+        const customerEmail = paymentCsvField(row, ["customer_email", "client_email", "email"]);
+        const currency = (paymentCsvField(row, ["currency", "ccy"]) || workspaceCurrency).slice(0, 3).toLowerCase();
         let invoiceId: string | null = null;
         let customerId: string | null = null;
         if (invoiceNumber) {
@@ -170,10 +198,10 @@ export async function enterpriseRoutes(app: FastifyInstance) {
           invoiceId = invoice.rows[0]?.id ?? null;
           customerId = invoice.rows[0]?.customer_id ?? null;
         }
-        if (!customerId && row.customer_email) {
+        if (!customerId && customerEmail) {
           const customer = await req.db.query<{ id: string }>(
             `SELECT id FROM customers WHERE tenant_id = $1 AND lower(email) = lower($2) LIMIT 1`,
-            [req.user.tenantId, row.customer_email.trim()],
+            [req.user.tenantId, customerEmail],
           );
           customerId = customer.rows[0]?.id ?? null;
         }
@@ -185,9 +213,9 @@ export async function enterpriseRoutes(app: FastifyInstance) {
             source: "csv",
             externalId,
             amount,
-            currency: (row.currency ?? "usd").slice(0, 3).toLowerCase(),
+            currency,
             invoiceId,
-            reference: row.reference ?? externalId,
+            reference: paymentCsvField(row, ["reference", "memo"]) || externalId,
           });
           await req.db.query("RELEASE SAVEPOINT cash_row");
           imported += 1;
@@ -376,6 +404,17 @@ export async function enterpriseRoutes(app: FastifyInstance) {
     return { filters: rows.rows };
   });
 
+  app.delete("/filters/:id", { preHandler: writer }, async (req) => {
+    const id = assertUuid((req.params as { id: string }).id, "Filter");
+    const removed = await req.db.query(`DELETE FROM saved_filters WHERE id = $1 AND tenant_id = $2 AND user_id = $3`, [
+      id,
+      req.user.tenantId,
+      req.user.userId,
+    ]);
+    if (!removed.rowCount) throw badRequest("Saved view not found");
+    return { ok: true };
+  });
+
   app.post("/filters", { preHandler: writer }, async (req, reply) => {
     const body = z
       .object({
@@ -429,19 +468,33 @@ export async function enterpriseRoutes(app: FastifyInstance) {
   });
 
   app.get("/exports/invoices", async (req, reply) => {
-    const format = z.object({ format: z.enum(["csv", "xls"]).default("csv") }).parse(req.query ?? {}).format;
+    const q = z
+      .object({
+        format: z.enum(["csv", "xls"]).default("csv"),
+        status: z.string().trim().max(40).optional(),
+        source: z.string().trim().max(40).optional(),
+        q: z.string().trim().max(120).optional(),
+      })
+      .parse(req.query ?? {});
+    const like = q.q ? `%${q.q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%` : null;
     const rows = await req.db.query(
-      `SELECT i.external_id, c.name AS customer, i.amount_due, i.currency, i.status, i.due_date::text AS due_date, i.source
+      `SELECT i.external_id, c.name AS customer,
+              to_char(i.amount_due / 100.0, 'FM999999990.00') AS amount,
+              i.currency, i.status, i.due_date::text AS due_date, i.source
          FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
-        WHERE i.tenant_id = $1 ORDER BY i.due_date NULLS LAST LIMIT 5000`,
-      [req.user.tenantId],
+        WHERE i.tenant_id = $1
+          AND ($2::text IS NULL OR i.status = $2)
+          AND ($3::text IS NULL OR i.source = $3)
+          AND ($4::text IS NULL OR c.name ILIKE $4 ESCAPE '\\' OR c.email ILIKE $4 ESCAPE '\\' OR i.external_id ILIKE $4 ESCAPE '\\')
+        ORDER BY i.due_date NULLS LAST LIMIT 5000`,
+      [req.user.tenantId, q.status && q.status !== "all" ? q.status : null, q.source && q.source !== "all" ? q.source : null, like],
     );
     await req.db.query(`INSERT INTO audit_log (tenant_id, actor, action, detail) VALUES ($1, $2, 'export_invoices', $3::jsonb)`, [
       req.user.tenantId,
       req.user.email,
-      JSON.stringify({ format, rows: rows.rows.length }),
+      JSON.stringify({ format: q.format, rows: rows.rows.length }),
     ]);
-    return sendTable(reply, "invoices", format, rows.rows as Record<string, unknown>[]);
+    return sendTable(reply, "invoices", q.format, rows.rows as Record<string, unknown>[]);
   });
 }
 
@@ -458,10 +511,12 @@ async function sequential(req: { db: { query: (sql: string, params?: unknown[]) 
   );
   const collectors = await req.db.query(
     `SELECT u.email, count(DISTINCT c.id)::int AS accounts,
-            COALESCE(SUM(i.amount_due) FILTER (WHERE i.status = 'paid' AND i.updated_at > now() - interval '30 days'), 0)::bigint AS collected
+            COALESCE(SUM(ca.amount), 0)::bigint AS collected
        FROM customers c
        LEFT JOIN users u ON u.id = c.collector_user_id
-       LEFT JOIN invoices i ON i.customer_id = c.id
+       LEFT JOIN invoices i ON i.customer_id = c.id AND i.tenant_id = c.tenant_id
+       LEFT JOIN cash_applications ca ON ca.invoice_id = i.id AND ca.tenant_id = c.tenant_id
+            AND ca.created_at > now() - interval '30 days'
       WHERE c.tenant_id = $1
       GROUP BY u.email ORDER BY collected DESC LIMIT 20`,
     [tenantId],

@@ -107,6 +107,22 @@ const devTokens: QboTokens = { accessToken: "dev_token", refreshToken: "dev_refr
   /**
    * Trigger a manual sync of QuickBooks invoices for the tenant.
    */
+  app.post("/integrations/qbo/disconnect", { preHandler: requireRole("admin") }, async (req) => {
+    const row = await req.db.query(`SELECT 1 FROM integrations WHERE tenant_id = $1 AND source = 'qbo' AND status = 'active'`, [
+      req.user.tenantId,
+    ]);
+    if (!row.rows[0]) throw badRequest("QuickBooks is not connected");
+    await req.db.query(
+      `UPDATE integrations SET status = 'disconnected', credentials = '{}'::jsonb, updated_at = now() WHERE tenant_id = $1 AND source = 'qbo'`,
+      [req.user.tenantId],
+    );
+    await req.db.query(`INSERT INTO audit_log (tenant_id, actor, action, detail) VALUES ($1, $2, 'qbo_disconnected', '{}'::jsonb)`, [
+      req.user.tenantId,
+      req.user.email,
+    ]);
+    return { ok: true };
+  });
+
   app.post(
     "/integrations/qbo/sync",
     { preHandler: requireRole("admin") },

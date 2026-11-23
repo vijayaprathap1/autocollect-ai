@@ -33,7 +33,7 @@ export function TeamTab() {
   const invitations = useQuery({ queryKey: ["invitations"], queryFn: getInvitations, enabled: isAdmin });
 
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"member" | "admin">("member");
+  const [role, setRole] = useState<Role>("member");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -115,7 +115,10 @@ export function TeamTab() {
                         })
                       }
                     >
+                      <option value="viewer">Viewer</option>
                       <option value="member">Member</option>
+                      <option value="collector">Collector</option>
+                      <option value="manager">Manager</option>
                       <option value="admin">Admin</option>
                       <option value="owner">Owner</option>
                     </select>
@@ -158,8 +161,11 @@ export function TeamTab() {
               <Field label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="teammate@company.com" required error={error} />
               <div>
                 <label className="mb-1 block text-sm font-medium">Role</label>
-                <select className="rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink" value={role} onChange={(e) => setRole(e.target.value as "member" | "admin")}>
+                <select className="rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink" value={role} onChange={(e) => setRole(e.target.value as Role)}>
+                  <option value="viewer">Viewer</option>
                   <option value="member">Member</option>
+                  <option value="collector">Collector</option>
+                  <option value="manager">Manager</option>
                   {isOwner && <option value="admin">Admin</option>}
                 </select>
               </div>
@@ -168,7 +174,7 @@ export function TeamTab() {
               </Button>
             </form>
           )}
-          <p className="mt-3 text-xs text-muted">Members can view invoices and replies. Admins can also change settings, send reminders and manage the team.</p>
+          <p className="mt-3 text-xs text-muted">Viewers can look but not change data. Members and collectors work the queue. Managers decide credit. Admins change settings. Only an owner can grant admin or owner.</p>
 
           {(invitations.data?.invitations.length ?? 0) > 0 && (
             <>

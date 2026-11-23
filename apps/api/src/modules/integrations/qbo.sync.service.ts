@@ -68,6 +68,12 @@ async function upsertQboInvoice(
                (SELECT id FROM workflows WHERE tenant_id = $1 AND is_default = TRUE LIMIT 1))
        ON CONFLICT (tenant_id, source, external_id)
        DO UPDATE SET amount_due = EXCLUDED.amount_due,
+                     payment_link = CASE
+                       WHEN invoices.stripe_payment_link_id IS NOT NULL AND invoices.amount_due IS DISTINCT FROM EXCLUDED.amount_due THEN NULL
+                       ELSE invoices.payment_link
+                     END,
+                     stripe_payment_link_id = CASE WHEN invoices.amount_due IS DISTINCT FROM EXCLUDED.amount_due THEN NULL ELSE invoices.stripe_payment_link_id END,
+                     payment_link_status = CASE WHEN invoices.stripe_payment_link_id IS NOT NULL AND invoices.amount_due IS DISTINCT FROM EXCLUDED.amount_due THEN NULL ELSE invoices.payment_link_status END,
                      currency = EXCLUDED.currency,
                      issue_date = EXCLUDED.issue_date,
                      due_date = EXCLUDED.due_date,

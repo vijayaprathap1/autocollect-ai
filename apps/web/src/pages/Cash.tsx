@@ -16,6 +16,7 @@ export function Cash() {
   const [externalId, setExternalId] = useState("");
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [manual, setManual] = useState<{ paymentId: string; lines: { invoiceId: string; label: string; due: number; amount: string }[] } | null>(null);
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
@@ -39,6 +40,42 @@ export function Cash() {
         return;
       }
       await applyCash(id, suggestion.suggestions.map((line) => ({ invoiceId: line.invoiceId, amount: line.amount })), true);
+      await queryClient.invalidateQueries({ queryKey: ["cash"] });
+      showToast("Cash applied", "success");
+    } catch (err) {
+      showToast((err as Error).message, "error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function openManual(id: string) {
+    const suggestion = await cashSuggestions(id);
+    setManual({
+      paymentId: id,
+      lines: suggestion.invoices.map((inv) => ({
+        invoiceId: inv.id,
+        label: inv.externalId ?? inv.id.slice(0, 8),
+        due: inv.amountDue,
+        amount: "",
+      })),
+    });
+  }
+
+  async function applyManual(e: React.FormEvent) {
+    e.preventDefault();
+    if (!manual) return;
+    const lines = manual.lines
+      .map((line) => ({ invoiceId: line.invoiceId, amount: Math.round(Number(line.amount) * 100) }))
+      .filter((line) => line.amount > 0);
+    if (!lines.length) {
+      showToast("Enter an amount on at least one invoice", "error");
+      return;
+    }
+    setBusy(manual.paymentId);
+    try {
+      await applyCash(manual.paymentId, lines, false);
+      setManual(null);
       await queryClient.invalidateQueries({ queryKey: ["cash"] });
       showToast("Cash applied", "success");
     } catch (err) {
@@ -90,12 +127,25 @@ export function Cash() {
                   <td className="px-4 py-3">{p.external_id}</td>
                   <td className="px-4 py-3 text-right">
                     <Button type="button" disabled={busy === p.id} onClick={() => void accept(p.id)}>{busy === p.id ? "Applying…" : "Apply suggestion"}</Button>
+                    <Button type="button" variant="secondary" className="ml-2" onClick={() => void openManual(p.id)}>Choose invoices</Button>
                     <Button type="button" variant="secondary" className="ml-2" onClick={() => dismissCash(p.id).then(() => queryClient.invalidateQueries({ queryKey: ["cash"] })).catch((err) => showToast((err as Error).message, "error"))}>Dismiss</Button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {manual && (
+            <form onSubmit={applyManual} className="grid gap-2 border-t border-line p-4">
+              <p className="text-sm font-medium">Apply specific amounts</p>
+              {manual.lines.length === 0 ? <p className="text-sm text-muted">No open invoices for this receipt.</p> : manual.lines.map((line) => (
+                <label key={line.invoiceId} className="flex items-center justify-between gap-3 text-sm">
+                  <span>{line.label} · due {formatMoney(line.due, currency)}</span>
+                  <input aria-label={`Amount for ${line.label}`} className="w-28 rounded-lg border border-line bg-bg px-2 py-1" inputMode="decimal" value={line.amount} onChange={(e) => setManual({ ...manual, lines: manual.lines.map((item) => item.invoiceId === line.invoiceId ? { ...item, amount: e.target.value } : item) })} />
+                </label>
+              ))}
+              <Button type="submit" disabled={busy === manual.paymentId}>Apply selected</Button>
+            </form>
+          )}
         </Card>
       )}
     </div>

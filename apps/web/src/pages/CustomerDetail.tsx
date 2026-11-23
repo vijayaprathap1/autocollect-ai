@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, PageHeader, Spinner } from "@/components/ui";
 import { Field } from "@/components/auth";
 import { useToast } from "@/components/Toast";
-import { createTask, getCustomer, getWorkflows, updateCustomer, assignStrategy } from "@/lib/api";
+import { addContact, createDispute, createTask, deleteContact, getCustomer, getWorkflows, updateCustomer, updateTask, assignStrategy } from "@/lib/api";
 import { formatDate, formatMoney } from "@/lib/format";
 import { useMe } from "@/lib/me";
 
@@ -26,6 +26,9 @@ export function CustomerDetail() {
   const workflows = useQuery({ queryKey: ["workflows"], queryFn: getWorkflows });
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDue, setTaskDue] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [disputeInvoice, setDisputeInvoice] = useState("");
+  const [disputeSummary, setDisputeSummary] = useState("");
 
   if (customer.isLoading) return <Card><Spinner label="Loading customer…" /></Card>;
   if (!customer.data) return <Card>Customer not found.</Card>;
@@ -68,7 +71,10 @@ export function CustomerDetail() {
     <div className="grid gap-6">
       <PageHeader
         title={c.name ?? "Customer"}
-        subtitle={[c.company, c.email, c.phone].filter(Boolean).join(" · ") || "No contact details yet"}
+        subtitle={[
+          [c.company, c.email, c.phone].filter(Boolean).join(" · ") || "No contact details yet",
+          c.creditStatus === "hold" ? "Credit hold — reminders and new payment links are paused" : "",
+        ].filter(Boolean).join(" · ")}
         actions={<Link to="/worklist" className="text-sm font-medium text-primary hover:underline">Back to worklist</Link>}
       />
       <div className="grid gap-4 sm:grid-cols-3">
@@ -108,8 +114,17 @@ export function CustomerDetail() {
       </Section>
       <Section title="Contacts">
         {data.contacts.length === 0 ? <p className="text-sm text-muted">No extra contacts.</p> : (
-          <ul className="text-sm">{data.contacts.map((ct) => <li key={ct.id}>{ct.name ?? ct.email ?? ct.phone} · {ct.role}{ct.is_primary ? " · primary" : ""}</li>)}</ul>
+          <ul className="text-sm">{data.contacts.map((ct) => (
+            <li key={ct.id} className="flex items-center justify-between gap-2">
+              <span>{ct.name ?? ct.email ?? ct.phone} · {ct.role}{ct.is_primary ? " · primary" : ""}</span>
+              <button type="button" className="text-xs text-muted hover:text-danger" onClick={() => deleteContact(id, ct.id).then(() => queryClient.invalidateQueries({ queryKey: ["customer", id] })).catch((err) => showToast((err as Error).message, "error"))}>Remove</button>
+            </li>
+          ))}</ul>
         )}
+        <form className="mt-3 flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); addContact(id, { email: contactEmail }).then(() => { setContactEmail(""); void queryClient.invalidateQueries({ queryKey: ["customer", id] }); }).catch((err) => showToast((err as Error).message, "error")); }}>
+          <Field label="Contact email" type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} required />
+          <Button type="submit" variant="secondary" disabled={!contactEmail.trim()}>Add contact</Button>
+        </form>
       </Section>
       <Section title="Communications">
         {data.communications.length === 0 ? <p className="text-sm text-muted">No reminders sent yet.</p> : (
@@ -125,6 +140,16 @@ export function CustomerDetail() {
         {data.disputes.length === 0 ? <p className="text-sm text-muted">No disputes.</p> : (
           <ul className="text-sm">{data.disputes.map((d) => <li key={d.id}><Link className="text-primary hover:underline" to={`/disputes/${d.id}`}>{d.reason_code}</Link> · {d.status}</li>)}</ul>
         )}
+        <form className="mt-3 flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); createDispute({ invoiceId: disputeInvoice, summary: disputeSummary || undefined }).then(() => { setDisputeSummary(""); showToast("Dispute opened", "success"); void queryClient.invalidateQueries({ queryKey: ["customer", id] }); }).catch((err) => showToast((err as Error).message, "error")); }}>
+          <label className="text-sm">Invoice
+            <select aria-label="Invoice to dispute" className="mt-1 block rounded-xl border border-line bg-surface px-3 py-2" value={disputeInvoice} onChange={(e) => setDisputeInvoice(e.target.value)} required>
+              <option value="">Choose</option>
+              {data.invoices.filter((inv) => inv.status === "open" || inv.status === "paused").map((inv) => <option key={inv.id} value={inv.id}>{inv.external_id ?? inv.id.slice(0, 8)}</option>)}
+            </select>
+          </label>
+          <Field label="Summary" value={disputeSummary} onChange={(e) => setDisputeSummary(e.target.value)} />
+          <Button type="submit" variant="secondary" disabled={!disputeInvoice}>Open dispute</Button>
+        </form>
       </Section>
       <Section title="Promises to pay">
         {data.promises.length === 0 ? <p className="text-sm text-muted">No promises.</p> : (
@@ -133,12 +158,17 @@ export function CustomerDetail() {
       </Section>
       <Section title="Payments">
         {data.payments.length === 0 ? <p className="text-sm text-muted">No payments recorded.</p> : (
-          <ul className="text-sm">{data.payments.map((p) => <li key={p.id}>{p.external_id ?? p.id.slice(0, 8)} · {formatMoney(p.amount_due, p.currency)}</li>)}</ul>
+          <ul className="text-sm">{data.payments.map((p) => <li key={p.id}>{p.external_id ?? p.source} · {formatMoney(p.amount, p.currency)}{p.invoice_external_id ? ` · ${p.invoice_external_id}` : ""}</li>)}</ul>
         )}
       </Section>
       <Section title="Tasks">
         <ul className="mb-3 space-y-1 text-sm">
-          {data.tasks.map((t) => <li key={t.id}>{t.title} · {t.status}{t.due_on ? ` · due ${formatDate(t.due_on)}` : ""} · {t.source}</li>)}
+          {data.tasks.map((t) => (
+            <li key={t.id} className="flex items-center justify-between gap-2">
+              <span>{t.title} · {t.status}{t.due_on ? ` · due ${formatDate(t.due_on)}` : ""} · {t.source}</span>
+              {t.status === "open" && <Button type="button" variant="secondary" onClick={() => updateTask(t.id, { status: "done" }).then(() => queryClient.invalidateQueries({ queryKey: ["customer", id] })).catch((err) => showToast((err as Error).message, "error"))}>Complete</Button>}
+            </li>
+          ))}
           {data.tasks.length === 0 && <li className="text-muted">No tasks.</li>}
         </ul>
         <form onSubmit={addTask} className="flex flex-wrap items-end gap-3">

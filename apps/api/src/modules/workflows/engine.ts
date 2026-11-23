@@ -3,7 +3,7 @@ import { servicePool } from "../../lib/db.js";
 import { sendEmail, PermanentEmailError } from "../../lib/postmark.js";
 import { sendSms, PermanentSmsError } from "../../lib/sms.js";
 import { renderTemplate } from "./render.js";
-import { ApiError, badRequest, notFound } from "../../lib/errors.js";
+import { ApiError, badRequest, conflict, notFound } from "../../lib/errors.js";
 import { deductCredit, refundCredit } from "../../lib/billing.js";
 import { acquireJobLease, releaseJobLease } from "../../lib/job-lock.js";
 import { scheduledSendTime, stepToSend, type ScheduleOptions } from "../../lib/schedule.js";
@@ -49,6 +49,7 @@ type InvoiceForEngine = {
   customer_sms_opt_out: boolean | null;
   customer_segment: string | null;
   customer_risk: number;
+  customer_credit_status: string | null;
   strategy_locked: boolean;
   tenant_name: string;
   tone: string;
@@ -85,6 +86,7 @@ const INVOICE_SELECT = `
          i.external_id, i.next_step_index, i.next_step_due_at, i.snoozed_until, i.workflow_id,
          c.id AS customer_id, c.name AS customer_name, c.email AS customer_email, c.phone AS customer_phone,
          c.sms_opt_out AS customer_sms_opt_out, c.segment AS customer_segment, COALESCE(c.risk_score, 0) AS customer_risk,
+         c.credit_status AS customer_credit_status,
          i.strategy_locked,
          t.name AS tenant_name, t.tone, t.timezone, t.send_hour, t.skip_weekends,
          COALESCE((t.branding->>'hideBranding')::boolean, FALSE) AS hide_branding,
@@ -208,6 +210,10 @@ function nextDueAfterSend(inv: InvoiceForEngine, steps: WorkflowStep[], sentInde
 }
 
 async function processOne(inv: InvoiceForEngine, now: Date, force: boolean, ctx: RunContext): Promise<ProcessResult> {
+  if (inv.customer_credit_status === "hold") {
+    if (force) throw conflict("This customer is on credit hold, so reminders are paused", "CREDIT_HOLD");
+    return "skipped";
+  }
   const wf = await ctx.workflow(inv);
   if (!wf || (!force && !wf.enabled)) {
     if (force) throw badRequest("This invoice has no active reminder workflow", "NO_WORKFLOW");
@@ -462,6 +468,7 @@ export async function runDunningDetailed(now = new Date()): Promise<DunningRunRe
       const batch = await servicePool.query<InvoiceForEngine>(
         `${INVOICE_SELECT}
           WHERE i.status = 'open' AND i.next_step_index < 9999 AND t.status = 'active'
+            AND COALESCE(c.credit_status, 'ok') <> 'hold'
             AND (i.next_step_due_at IS NULL OR i.next_step_due_at <= $1)
             AND EXISTS (
               SELECT 1 FROM workflows w

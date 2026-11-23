@@ -38,6 +38,7 @@ export function Worklist() {
                   <td className="px-4 py-3 font-semibold tabular-nums">{row.riskScore}</td>
                   <td className="px-4 py-3">
                     <Link to={`/customers/${row.id}`} className="font-medium text-primary hover:underline">{row.name ?? "Unknown"}</Link>
+                    {row.creditStatus === "hold" && <span className="ml-2 rounded-full bg-danger/10 px-2 py-0.5 text-xs text-danger">Credit hold</span>}
                     <div className="text-xs text-muted">{row.segment ?? "no segment"}{row.email ? ` · ${row.email}` : ""}</div>
                   </td>
                   <td className="px-4 py-3">{formatMoney(row.openTotal, currency)} <span className="text-muted">({row.openCount})</span></td>

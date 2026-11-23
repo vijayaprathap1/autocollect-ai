@@ -61,7 +61,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
       `SELECT
          COALESCE(SUM(amount_due) FILTER (WHERE status = 'open'), 0)::bigint AS outstanding,
          COALESCE(SUM(amount_due) FILTER (WHERE status = 'open' AND due_date < CURRENT_DATE), 0)::bigint AS overdue,
-         COALESCE(SUM(amount_due) FILTER (WHERE status = 'paid' AND updated_at >= now() - interval '30 days'), 0)::bigint AS recovered30d,
+         COALESCE((SELECT SUM(amount) FROM cash_applications WHERE tenant_id = $1 AND created_at >= now() - interval '30 days'), 0)::bigint AS recovered30d,
          COUNT(*) FILTER (WHERE status = 'open')::int AS open_count,
          COUNT(*) FILTER (WHERE status = 'paid' AND updated_at >= now() - interval '30 days')::int AS paid_count_30d,
          AVG(updated_at::date - issue_date) FILTER (WHERE status = 'paid' AND issue_date IS NOT NULL AND updated_at::date >= issue_date AND updated_at >= now() - ($2::int * interval '1 day'))::int AS avg_dso_days
@@ -74,15 +74,24 @@ export async function dashboardRoutes(app: FastifyInstance) {
     const days = rangeDays[range];
     const ceiRow = await req.db.query<{ beginning: number; credit_sales: number; ending_total: number; ending_current: number }>(
         `WITH sales AS (
-           SELECT COALESCE(SUM(amount_due), 0)::bigint AS credit_sales
-             FROM invoices
-            WHERE tenant_id = $1 AND status <> 'void'
-              AND COALESCE(issue_date, created_at::date) >= CURRENT_DATE - $2::int
+           SELECT COALESCE(SUM(i.amount_due), 0)::bigint
+                  + COALESCE((
+                      SELECT SUM(a.amount) FROM cash_applications a
+                       WHERE a.tenant_id = $1
+                         AND a.invoice_id IN (
+                           SELECT id FROM invoices
+                            WHERE tenant_id = $1 AND status <> 'void'
+                              AND COALESCE(issue_date, created_at::date) >= CURRENT_DATE - $2::int
+                         )
+                    ), 0)::bigint AS credit_sales
+             FROM invoices i
+            WHERE i.tenant_id = $1 AND i.status <> 'void'
+              AND COALESCE(i.issue_date, i.created_at::date) >= CURRENT_DATE - $2::int
          ),
          collected AS (
-           SELECT COALESCE(SUM(amount_due), 0)::bigint AS collected
-             FROM invoices
-            WHERE tenant_id = $1 AND status = 'paid' AND updated_at::date >= CURRENT_DATE - $2::int
+           SELECT COALESCE(SUM(amount), 0)::bigint AS collected
+             FROM cash_applications
+            WHERE tenant_id = $1 AND created_at::date >= CURRENT_DATE - $2::int
          ),
          ending AS (
            SELECT COALESCE(SUM(amount_due) FILTER (WHERE status = 'open'), 0)::bigint AS ending_total,
@@ -95,9 +104,9 @@ export async function dashboardRoutes(app: FastifyInstance) {
         [tenantId, days],
       );
     const cash = await req.db.query<{ date: string; amount: number }>(
-        `SELECT updated_at::date::text AS date, COALESCE(SUM(amount_due), 0)::bigint AS amount
-           FROM invoices
-          WHERE tenant_id = $1 AND status = 'paid' AND updated_at::date >= CURRENT_DATE - $2::int
+        `SELECT created_at::date::text AS date, COALESCE(SUM(amount), 0)::bigint AS amount
+           FROM cash_applications
+          WHERE tenant_id = $1 AND created_at::date >= CURRENT_DATE - $2::int
           GROUP BY 1 ORDER BY 1`,
         [tenantId, days],
       );
