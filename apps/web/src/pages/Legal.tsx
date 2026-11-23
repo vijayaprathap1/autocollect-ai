@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import "@fontsource-variable/fraunces";
+import "@fontsource-variable/inter";
 import { CONTACT_EMAIL, Logo, SiteFooter, btnPrimary } from "@/components/marketing";
 import { cn } from "@/components/ui";
 
@@ -60,7 +60,7 @@ function LegalPage({ title, intro, sections }: { title: string; intro: ReactNode
 
         <article className="max-w-2xl">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Legal</p>
-          <h1 className="mt-3 font-display text-4xl font-medium tracking-tight text-navy sm:text-5xl">{title}</h1>
+          <h1 className="mt-3 font-display text-4xl font-semibold tracking-tight text-navy sm:text-5xl">{title}</h1>
           <p className="mt-3 text-sm text-muted">Last updated {LAST_UPDATED}</p>
           <div className="mt-6 text-base leading-relaxed text-slate-700">{intro}</div>
 

@@ -8,12 +8,13 @@ export const CONTACT_EMAIL = "support@botly.in";
 const focusRing = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2";
 const btnBase = "inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold transition-colors";
 export const btnPrimary = cn(btnBase, focusRing, "bg-primary text-white shadow-sm hover:bg-primary-hover focus-visible:outline-primary");
-export const btnGhost = cn(btnBase, focusRing, "border border-slate-300 bg-white/70 text-ink hover:bg-white focus-visible:outline-primary");
+export const btnGhost = cn(btnBase, focusRing, "border border-slate-300 bg-white text-navy hover:border-slate-400 hover:bg-slate-50 focus-visible:outline-primary");
 export const btnInverse = cn(btnBase, focusRing, "bg-white text-navy shadow-sm hover:bg-slate-100 focus-visible:outline-white");
+export const btnOnDark = cn(btnBase, focusRing, "border border-white/25 text-white hover:border-white/50 hover:bg-white/10 focus-visible:outline-white");
 
 export function Logo() {
   return (
-    <span className="inline-flex items-center gap-2 text-base font-bold text-ink">
+    <span className="inline-flex items-center gap-2 text-base font-bold tracking-tight text-navy">
       <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary" aria-hidden="true">
         <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
           <path d="M5 12.5l4.5 4.5L19 7.5" />
@@ -26,7 +27,7 @@ export function Logo() {
 
 export function SiteFooter({ links = [] }: { links?: { href: string; label: string }[] }) {
   return (
-    <footer className="border-t border-slate-200">
+    <footer className="border-t border-slate-200 bg-white">
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-5 px-5 py-8 lg:flex-row">
         <Link to="/" aria-label="AutoCollect AI home">
           <Logo />

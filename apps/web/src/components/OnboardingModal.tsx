@@ -76,6 +76,16 @@ export function OnboardingModal({ isOpen, onClose }: { isOpen: boolean; onClose:
     }
   }, [isOpen, me, onClose]);
 
+  // While open, the dialog scrolls on its own and the dashboard behind it stays put.
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const step = STEPS[currentStep];
@@ -96,10 +106,11 @@ export function OnboardingModal({ isOpen, onClose }: { isOpen: boolean; onClose:
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/50" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+      <div className="flex min-h-full items-center justify-center p-4">
       <div className="w-full max-w-lg rounded-xl bg-surface p-6 shadow-xl animate-in fade-in zoom-in-95">
         <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Welcome to AutoCollect AI</h2>
+          <h2 id="onboarding-title" className="text-xl font-semibold">Welcome to AutoCollect AI</h2>
           <button onClick={handleSkip} className="text-muted hover:text-ink" aria-label="Skip onboarding">
             ✕
           </button>
@@ -157,6 +168,7 @@ export function OnboardingModal({ isOpen, onClose }: { isOpen: boolean; onClose:
           <span className="w-3 h-3 rounded-full bg-line" />
           <span>Pending</span>
         </div>
+      </div>
       </div>
     </div>
   );
